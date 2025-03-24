@@ -85,12 +85,26 @@ const getBlogBySlug = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const createBlog = asyncHandler(async (req, res) => {
   try {
-    const { title, content, thumbnail, author, slug, isActive } = req.body;
+    console.log('Creating blog with data:', req.body);
+    console.log('Files:', req.files);
 
-    // Handle base64 image
-    let thumbnailPath = thumbnail;
-    if (thumbnail && thumbnail.startsWith('data:image')) {
-      thumbnailPath = await saveBase64Image(thumbnail);
+    const { title, content, author, slug, isPublished } = req.body;
+
+    // Handle file upload
+    let thumbnailPath = null;
+    if (req.files && req.files.thumbnail) {
+      const file = req.files.thumbnail;
+      const filename = `blog-${Date.now()}${path.extname(file.name)}`;
+      const uploadPath = path.join(__dirname, '..', 'uploads', 'thumbnails', filename);
+      
+      await file.mv(uploadPath);
+      thumbnailPath = `/uploads/thumbnails/${filename}`;
+    } else if (req.body.thumbnail && req.body.thumbnail.startsWith('data:image')) {
+      thumbnailPath = await saveBase64Image(req.body.thumbnail);
+    }
+
+    if (!thumbnailPath) {
+      return res.status(400).json({ message: 'Blog thumbnail is required' });
     }
 
     const blog = await Blog.create({
@@ -99,7 +113,7 @@ const createBlog = asyncHandler(async (req, res) => {
       thumbnail: thumbnailPath,
       author,
       slug,
-      isActive
+      isPublished: isPublished === 'true'
     });
 
     // Transform thumbnail path to full URL

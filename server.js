@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs').promises;
 const multer = require('multer');
+const fileUpload = require('express-fileupload');
 
 // Load env vars
 dotenv.config();
@@ -42,15 +43,41 @@ const blogRoutes = require('./routes/blogRoutes');
 
 const app = express();
 
-// Body parser with increased limits
+// Enable CORS with proper configuration
+app.use(cors({
+  origin: [
+    'http://localhost:5173',  // Vite dev server
+    'http://localhost:3000',  // Frontend
+    'http://localhost:3001',  // Admin
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_URL
+  ].filter(Boolean),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
+
+// File Upload Middleware
+app.use(fileUpload({
+  createParentPath: true,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB max file size
+  },
+  abortOnLimit: true,
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
+  debug: true
+}));
+
+// Increase payload limits
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Enable CORS
-app.use(cors());
-
-// Static folder with proper path
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static folder with proper path and CORS headers
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // Mount routes
 app.use('/api/auth', authRoutes);

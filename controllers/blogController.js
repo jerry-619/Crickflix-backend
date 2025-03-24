@@ -41,7 +41,7 @@ const getBlogs = asyncHandler(async (req, res) => {
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const blogsWithUrls = blogs.map(blog => ({
       ...blog.toObject(),
-      thumbnail: blog.thumbnail ? `${baseUrl}${blog.thumbnail}` : null
+      thumbnail: blog.thumbnail ? `${baseUrl}/${blog.thumbnail}` : null
     }));
     
     res.json(blogsWithUrls);
@@ -70,7 +70,7 @@ const getBlogBySlug = asyncHandler(async (req, res) => {
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const blogWithUrl = {
       ...blog.toObject(),
-      thumbnail: blog.thumbnail ? `${baseUrl}${blog.thumbnail}` : null
+      thumbnail: blog.thumbnail ? `${baseUrl}/${blog.thumbnail}` : null
     };
     
     res.json(blogWithUrl);
@@ -84,7 +84,7 @@ const getBlogBySlug = asyncHandler(async (req, res) => {
 // @route   POST /api/blogs
 // @access  Private/Admin
 const createBlog = asyncHandler(async (req, res) => {
-  const { title, content, author } = req.body;
+  const { title, content, author, isPublished = true } = req.body;
 
   if (!title || !content || !author) {
     res.status(400);
@@ -104,11 +104,18 @@ const createBlog = asyncHandler(async (req, res) => {
     content,
     author,
     thumbnail: thumbnailPath,
-    slug
+    slug,
+    isPublished: isPublished === 'true'
   });
 
   if (blog) {
-    res.status(201).json(blog);
+    // Transform thumbnail path to full URL for response
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const blogWithUrl = {
+      ...blog.toObject(),
+      thumbnail: blog.thumbnail ? `${baseUrl}/${blog.thumbnail}` : null
+    };
+    res.status(201).json(blogWithUrl);
   } else {
     res.status(400);
     throw new Error('Invalid blog data');
@@ -126,11 +133,21 @@ const updateBlog = asyncHandler(async (req, res) => {
     throw new Error('Blog not found');
   }
 
-  const { title, content, author } = req.body;
+  const { title, content, author, isPublished } = req.body;
   let thumbnailPath = blog.thumbnail; // Keep existing thumbnail by default
 
   if (req.file) {
     thumbnailPath = req.file.path.replace(/\\/g, '/'); // Update thumbnail if new file uploaded
+    
+    // Delete old thumbnail if it exists
+    if (blog.thumbnail) {
+      const oldPath = path.join(__dirname, '..', blog.thumbnail);
+      try {
+        await fs.unlink(oldPath);
+      } catch (err) {
+        console.error('Error deleting old thumbnail:', err);
+      }
+    }
   }
 
   const updatedBlog = await Blog.findByIdAndUpdate(
@@ -140,13 +157,20 @@ const updateBlog = asyncHandler(async (req, res) => {
       content: content || blog.content,
       author: author || blog.author,
       thumbnail: thumbnailPath,
+      isPublished: isPublished === 'true',
       slug: title ? title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-') : blog.slug
     },
     { new: true }
   );
 
   if (updatedBlog) {
-    res.json(updatedBlog);
+    // Transform thumbnail path to full URL for response
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const blogWithUrl = {
+      ...updatedBlog.toObject(),
+      thumbnail: updatedBlog.thumbnail ? `${baseUrl}/${updatedBlog.thumbnail}` : null
+    };
+    res.json(blogWithUrl);
   } else {
     res.status(400);
     throw new Error('Could not update blog');
@@ -165,7 +189,7 @@ const deleteBlog = asyncHandler(async (req, res) => {
 
     // Delete thumbnail if it exists
     if (blog.thumbnail) {
-      const thumbnailPath = path.join(__dirname, '..', blog.thumbnail.replace(/^\//, ''));
+      const thumbnailPath = path.join(__dirname, '..', blog.thumbnail);
       try {
         await fs.unlink(thumbnailPath);
       } catch (err) {

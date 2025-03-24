@@ -27,7 +27,7 @@ const blogSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  isActive: {
+  isPublished: {
     type: Boolean,
     default: true
   }
@@ -37,6 +37,10 @@ const blogSchema = new mongoose.Schema({
 
 // Create slug from title before saving
 blogSchema.pre('save', function(next) {
+  if (!this.isModified('title')) {
+    return next();
+  }
+  
   this.slug = this.title
     .toLowerCase()
     .replace(/[^\w\s-]/g, '')

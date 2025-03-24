@@ -5,7 +5,6 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const connectDB = require('./config/db');
 
 // Load env vars
 dotenv.config();
@@ -81,10 +80,33 @@ app.use('/api', streamRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
 
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI, {
+
+})
+.then(() => console.log('MongoDB Connected'))
+.catch(err => console.log('MongoDB connection error:', err));
+
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: err.message || 'Something went wrong!' });
+  console.error('Error:', err);
+  
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'File is too large. Maximum size is 5MB.' });
+    }
+    return res.status(400).json({ message: 'File upload error: ' + err.message });
+  }
+  
+  if (err.message && err.message.includes('Invalid file type')) {
+    return res.status(400).json({ message: err.message });
+  }
+
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'Request entity too large. Please reduce the file size.' });
+  }
+  
+  res.status(500).json({ message: 'Something went wrong!' });
 });
 
 // Export upload middleware for use in routes
@@ -92,13 +114,8 @@ module.exports = { upload };
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}).catch(err => {
-  console.error('Database connection failed:', err);
-  process.exit(1);
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 
 

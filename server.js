@@ -25,11 +25,14 @@ if (!fs.existsSync(thumbnailDir)) fs.mkdirSync(thumbnailDir, { recursive: true }
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
+  path: '/socket.io',
   cors: {
     origin: [process.env.FRONTEND_URL, process.env.ADMIN_URL],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
+  allowEIO3: true,
   transports: ['websocket', 'polling']
 });
 
@@ -123,8 +126,12 @@ app.use((err, req, res, next) => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Client disconnected:', socket.id, 'Reason:', reason);
   });
 });
 

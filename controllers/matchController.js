@@ -129,11 +129,12 @@ const createMatch = asyncHandler(async (req, res) => {
 
     // Create match
     const match = await Match.create(matchData);
+    const populatedMatch = await Match.findById(match._id).populate('category', 'name slug');
     
     // Emit socket event for new match
-    req.app.get('io').emit('matchCreated', match);
+    req.app.get('io').emit('matchCreated', populatedMatch);
     
-    res.status(201).json(match);
+    res.status(201).json(populatedMatch);
   } catch (error) {
     console.error('Error creating match:', error);
     // Delete uploaded files if match creation fails
@@ -234,6 +235,11 @@ const updateMatch = asyncHandler(async (req, res) => {
       { new: true, runValidators: true }
     ).populate('category', 'name slug');
 
+    if (!updatedMatch) {
+      res.status(404);
+      throw new Error('Match not found');
+    }
+
     // Emit socket event for match update
     req.app.get('io').emit('matchUpdated', updatedMatch);
 
@@ -254,9 +260,9 @@ const updateMatch = asyncHandler(async (req, res) => {
 const deleteMatch = asyncHandler(async (req, res) => {
   try {
     const match = await Match.findById(req.params.id);
-
     if (!match) {
-      return res.status(404).json({ message: 'Match not found' });
+      res.status(404);
+      throw new Error('Match not found');
     }
 
     // Delete thumbnail from Cloudinary if exists
@@ -269,10 +275,10 @@ const deleteMatch = asyncHandler(async (req, res) => {
     // Emit socket event for match deletion
     req.app.get('io').emit('matchDeleted', req.params.id);
 
-    res.json({ message: 'Match removed' });
+    res.json({ message: 'Match removed', id: req.params.id });
   } catch (error) {
     console.error('Error deleting match:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 });
 

@@ -27,6 +27,22 @@ const saveUploadedFile = async (file, filename) => {
   }
 };
 
+// Helper function to validate file
+const validateFile = (file) => {
+  // Check file size (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('File size should not exceed 5MB');
+  }
+
+  // Check file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+  if (!allowedTypes.includes(file.mimetype)) {
+    throw new Error('Invalid file type. Only JPEG, PNG and GIF images are allowed');
+  }
+
+  return true;
+};
+
 // @desc    Get all categories
 // @route   GET /api/categories
 // @access  Public
@@ -77,6 +93,8 @@ const getCategoryBySlug = async (req, res) => {
 // @route   POST /api/categories
 // @access  Private/Admin
 const createCategory = async (req, res) => {
+  let thumbnailPath = null;
+  
   try {
     console.log('Creating category with data:', req.body);
     console.log('Files received:', req.files);
@@ -87,15 +105,25 @@ const createCategory = async (req, res) => {
 
     const categoryData = {
       name: req.body.name,
-      description: req.body.description,
+      description: req.body.description || '',
       isActive: req.body.isActive === 'true'
     };
     
     // Handle thumbnail upload
     if (req.files && req.files.thumbnail) {
       const file = req.files.thumbnail;
+      
+      try {
+        validateFile(file);
+      } catch (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
       const filename = `${Date.now()}-${file.name}`;
-      categoryData.thumbnail = await saveUploadedFile(file, filename);
+      thumbnailPath = await saveUploadedFile(file, filename);
+      categoryData.thumbnail = thumbnailPath;
+    } else {
+      return res.status(400).json({ message: 'Thumbnail is required' });
     }
 
     const category = await Category.create(categoryData);
@@ -110,15 +138,15 @@ const createCategory = async (req, res) => {
     res.status(201).json(categoryWithUrl);
   } catch (error) {
     // Delete uploaded file if category creation fails
-    if (categoryData && categoryData.thumbnail) {
-      await deleteFile(categoryData.thumbnail);
+    if (thumbnailPath) {
+      await deleteFile(thumbnailPath);
     }
 
     console.error('Error creating category:', error);
     if (error.code === 11000) {
       res.status(400).json({ message: 'Category already exists' });
     } else {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ message: error.message || 'Server error' });
     }
   }
 };
@@ -127,6 +155,8 @@ const createCategory = async (req, res) => {
 // @route   PUT /api/categories/:id
 // @access  Private/Admin
 const updateCategory = async (req, res) => {
+  let thumbnailPath = null;
+
   try {
     console.log('Updating category with data:', req.body);
     console.log('Files received:', req.files);
@@ -137,15 +167,26 @@ const updateCategory = async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
+    if (!req.body.name) {
+      return res.status(400).json({ message: 'Name is required' });
+    }
+
     const categoryData = {
       name: req.body.name,
-      description: req.body.description,
+      description: req.body.description || '',
       isActive: req.body.isActive === 'true'
     };
     
     // Handle thumbnail update
     if (req.files && req.files.thumbnail) {
       const file = req.files.thumbnail;
+      
+      try {
+        validateFile(file);
+      } catch (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
       const filename = `${Date.now()}-${file.name}`;
       
       // Delete old thumbnail if it exists
@@ -153,7 +194,8 @@ const updateCategory = async (req, res) => {
         await deleteFile(category.thumbnail);
       }
       
-      categoryData.thumbnail = await saveUploadedFile(file, filename);
+      thumbnailPath = await saveUploadedFile(file, filename);
+      categoryData.thumbnail = thumbnailPath;
     }
 
     const updatedCategory = await Category.findByIdAndUpdate(
@@ -172,15 +214,15 @@ const updateCategory = async (req, res) => {
     res.json(categoryWithUrl);
   } catch (error) {
     // Delete uploaded file if update fails
-    if (categoryData && categoryData.thumbnail) {
-      await deleteFile(categoryData.thumbnail);
+    if (thumbnailPath) {
+      await deleteFile(thumbnailPath);
     }
 
     console.error('Error updating category:', error);
     if (error.code === 11000) {
       res.status(400).json({ message: 'Category already exists' });
     } else {
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ message: error.message || 'Server error' });
     }
   }
 };
@@ -213,7 +255,7 @@ const deleteCategory = async (req, res) => {
     res.json({ message: 'Category removed' });
   } catch (error) {
     console.error('Error deleting category:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 

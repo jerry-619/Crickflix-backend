@@ -65,28 +65,33 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Content-Length'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 };
 
 app.use(cors(corsOptions));
 
-// File Upload Middleware
+// Increase payload limits first
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// File Upload Middleware with improved configuration
 app.use(fileUpload({
   createParentPath: true,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB max file size
+    fileSize: 5 * 1024 * 1024, // 5MB max file size
+    files: 1 // Allow only 1 file per request
   },
   abortOnLimit: true,
   useTempFiles: true,
   tempFileDir: '/tmp/',
   parseNested: true,
-  debug: process.env.NODE_ENV === 'development'
+  debug: process.env.NODE_ENV === 'development',
+  safeFileNames: true,
+  preserveExtension: true,
+  uploadTimeout: 30000, // 30 seconds
+  responseOnLimit: 'File size limit has been reached'
 }));
-
-// Increase payload limits
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Static folder with proper CORS headers
 app.use('/uploads', (req, res, next) => {
@@ -135,6 +140,11 @@ app.use((err, req, res, next) => {
   // Handle CORS errors
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({ message: 'CORS policy: Origin not allowed' });
+  }
+
+  // Handle file upload errors
+  if (err.message && err.message.includes('Unexpected end of form')) {
+    return res.status(400).json({ message: 'File upload failed. Please try again.' });
   }
   
   res.status(500).json({ 

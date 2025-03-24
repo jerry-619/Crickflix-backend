@@ -7,6 +7,8 @@ const fs = require('fs');
 const multer = require('multer');
 const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 
 // Load env vars
 dotenv.config();
@@ -21,6 +23,13 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 if (!fs.existsSync(thumbnailDir)) fs.mkdirSync(thumbnailDir, { recursive: true });
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: [process.env.FRONTEND_URL, process.env.ADMIN_URL],
+    methods: ["GET", "POST"]
+  }
+});
 
 // Enable CORS with proper configuration
 app.use(cors({
@@ -108,13 +117,24 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected');
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+});
+
+// Export io instance to use in controllers
+app.set('io', io);
+
 // Export upload middleware
 module.exports = { upload };
 
 const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 

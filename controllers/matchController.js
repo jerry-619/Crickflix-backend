@@ -4,6 +4,7 @@ const cloudinary = require('../config/cloudinary');
 const uploadToCloudinary = require('../utils/uploadToCloudinary');
 const fs = require('fs').promises;
 const path = require('path');
+const asyncHandler = require('express-async-handler');
 
 // Helper function to delete file from Cloudinary
 const deleteFromCloudinary = async (publicId) => {
@@ -64,7 +65,7 @@ const getMatch = async (req, res) => {
 // @desc    Create new match
 // @route   POST /api/matches
 // @access  Private/Admin
-const createMatch = async (req, res) => {
+const createMatch = asyncHandler(async (req, res) => {
   try {
     // Verify category exists
     const category = await Category.findById(req.body.category);
@@ -128,6 +129,10 @@ const createMatch = async (req, res) => {
 
     // Create match
     const match = await Match.create(matchData);
+    
+    // Emit socket event for new match
+    req.app.get('io').emit('matchCreated', match);
+    
     res.status(201).json(match);
   } catch (error) {
     console.error('Error creating match:', error);
@@ -137,12 +142,12 @@ const createMatch = async (req, res) => {
     }
     res.status(500).json({ message: error.message || 'Server error' });
   }
-};
+});
 
 // @desc    Update match
 // @route   PUT /api/matches/:id
 // @access  Private/Admin
-const updateMatch = async (req, res) => {
+const updateMatch = asyncHandler(async (req, res) => {
   try {
     const match = await Match.findById(req.params.id);
 
@@ -229,6 +234,9 @@ const updateMatch = async (req, res) => {
       { new: true, runValidators: true }
     ).populate('category', 'name slug');
 
+    // Emit socket event for match update
+    req.app.get('io').emit('matchUpdated', updatedMatch);
+
     res.json(updatedMatch);
   } catch (error) {
     console.error('Error updating match:', error);
@@ -238,12 +246,12 @@ const updateMatch = async (req, res) => {
     }
     res.status(500).json({ message: error.message || 'Server error' });
   }
-};
+});
 
 // @desc    Delete match
 // @route   DELETE /api/matches/:id
 // @access  Private/Admin
-const deleteMatch = async (req, res) => {
+const deleteMatch = asyncHandler(async (req, res) => {
   try {
     const match = await Match.findById(req.params.id);
 
@@ -257,12 +265,16 @@ const deleteMatch = async (req, res) => {
     }
 
     await match.deleteOne();
+    
+    // Emit socket event for match deletion
+    req.app.get('io').emit('matchDeleted', req.params.id);
+
     res.json({ message: 'Match removed' });
   } catch (error) {
     console.error('Error deleting match:', error);
     res.status(500).json({ message: 'Server error' });
   }
-};
+});
 
 // @desc    Toggle match live status
 // @route   PUT /api/matches/:id/toggle-live

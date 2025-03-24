@@ -27,8 +27,10 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: [process.env.FRONTEND_URL, process.env.ADMIN_URL],
-    methods: ["GET", "POST"]
-  }
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
 });
 
 // Enable CORS with proper configuration
@@ -119,10 +121,10 @@ app.use((err, req, res, next) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected');
+  console.log('Client connected:', socket.id);
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected');
+    console.log('Client disconnected:', socket.id);
   });
 });
 

@@ -83,6 +83,9 @@ const createBlog = asyncHandler(async (req, res) => {
       isPublished: isPublished === 'true'
     });
 
+    // Emit socket event for new blog
+    req.app.get('io').emit('blogCreated', blog);
+    
     res.status(201).json(blog);
   } catch (error) {
     // Clean up uploaded file if blog creation fails
@@ -133,8 +136,11 @@ const updateBlog = asyncHandler(async (req, res) => {
         isPublished: isPublished === 'true',
         slug: title ? title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-') : blog.slug
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
+
+    // Emit socket event for blog update
+    req.app.get('io').emit('blogUpdated', updatedBlog);
 
     res.json(updatedBlog);
   } catch (error) {
@@ -165,6 +171,10 @@ const deleteBlog = asyncHandler(async (req, res) => {
     }
 
     await blog.deleteOne();
+
+    // Emit socket event for blog deletion
+    req.app.get('io').emit('blogDeleted', req.params.id);
+
     res.json({ message: 'Blog deleted successfully' });
   } catch (error) {
     console.error('Error deleting blog:', error);

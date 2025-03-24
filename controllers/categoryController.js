@@ -4,6 +4,7 @@ const cloudinary = require('../config/cloudinary');
 const uploadToCloudinary = require('../utils/uploadToCloudinary');
 const fs = require('fs').promises;
 const path = require('path');
+const asyncHandler = require('express-async-handler');
 
 // Helper function to delete file from Cloudinary
 const deleteFromCloudinary = async (publicId) => {
@@ -50,7 +51,7 @@ const getCategoryBySlug = async (req, res) => {
 // @desc    Create new category
 // @route   POST /api/categories
 // @access  Private/Admin
-const createCategory = async (req, res) => {
+const createCategory = asyncHandler(async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Thumbnail is required' });
@@ -68,6 +69,10 @@ const createCategory = async (req, res) => {
     };
 
     const category = await Category.create(categoryData);
+    
+    // Emit socket event for new category
+    req.app.get('io').emit('categoryCreated', category);
+    
     res.status(201).json(category);
   } catch (error) {
     if (req.file) {
@@ -80,12 +85,12 @@ const createCategory = async (req, res) => {
       res.status(500).json({ message: 'Server error' });
     }
   }
-};
+});
 
 // @desc    Update category
 // @route   PUT /api/categories/:id
 // @access  Private/Admin
-const updateCategory = async (req, res) => {
+const updateCategory = asyncHandler(async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
 
@@ -117,6 +122,9 @@ const updateCategory = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    // Emit socket event for category update
+    req.app.get('io').emit('categoryUpdated', updatedCategory);
+
     res.json(updatedCategory);
   } catch (error) {
     // Delete uploaded file if update fails
@@ -131,12 +139,12 @@ const updateCategory = async (req, res) => {
       res.status(500).json({ message: 'Server error' });
     }
   }
-};
+});
 
 // @desc    Delete category
 // @route   DELETE /api/categories/:id
 // @access  Private/Admin
-const deleteCategory = async (req, res) => {
+const deleteCategory = asyncHandler(async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
     if (!category) {
@@ -157,12 +165,16 @@ const deleteCategory = async (req, res) => {
     }
 
     await Category.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Category removed successfully' });
+    
+    // Emit socket event for category deletion
+    req.app.get('io').emit('categoryDeleted', req.params.id);
+
+    res.json({ message: 'Category removed' });
   } catch (error) {
     console.error('Error deleting category:', error);
     res.status(500).json({ message: error.message || 'Server error' });
   }
-};
+});
 
 module.exports = {
   getCategories,

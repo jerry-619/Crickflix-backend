@@ -1,5 +1,22 @@
 const mongoose = require('mongoose');
 
+const streamingSourceSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  url: {
+    type: String,
+    required: true
+  },
+  type: {
+    type: String,
+    enum: ['m3u8', 'dash', 'mp4', 'iframe', 'other'],
+    default: 'm3u8'
+  }
+}, { _id: false });
+
 const matchSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -13,16 +30,9 @@ const matchSchema = new mongoose.Schema({
   thumbnail: {
     type: String
   },
-  streamingUrl: {
-    type: String
-  },
-  iframeUrl: {
-    type: String
-  },
-  streamType: {
-    type: String,
-    enum: ['m3u8', 'dash', 'mp4', 'iframe', 'other'],
-    default: 'm3u8'
+  streamingSources: {
+    type: [streamingSourceSchema],
+    default: []
   },
   category: {
     type: mongoose.Schema.Types.ObjectId,

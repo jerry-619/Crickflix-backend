@@ -95,12 +95,24 @@ const createMatch = async (req, res) => {
       return res.status(400).json({ message: 'Invalid category' });
     }
 
-    // Validate that either streamingUrl or iframeUrl is provided for live matches
-    if (req.body.status === 'live' && !req.body.streamingUrl && !req.body.iframeUrl) {
+    // Parse streaming sources from the request body
+    let streamingSources = [];
+    try {
+      streamingSources = JSON.parse(req.body.streamingSources || '[]');
+    } catch (error) {
+      console.error('Error parsing streaming sources:', error);
       if (req.files) {
         await deleteFiles(Object.values(req.files).flat().map(f => f.path));
       }
-      return res.status(400).json({ message: 'Either streaming URL or iframe URL is required for live matches' });
+      return res.status(400).json({ message: 'Invalid streaming sources format' });
+    }
+
+    // Validate that at least one streaming source is provided for live matches
+    if (req.body.status === 'live' && (!streamingSources || streamingSources.length === 0)) {
+      if (req.files) {
+        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+      }
+      return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
     }
 
     // Validate scheduledTime for upcoming matches
@@ -111,7 +123,10 @@ const createMatch = async (req, res) => {
       return res.status(400).json({ message: 'Scheduled time is required for upcoming matches' });
     }
 
-    const matchData = { ...req.body };
+    const matchData = {
+      ...req.body,
+      streamingSources
+    };
     
     // Convert scheduledTime string to Date object
     if (matchData.scheduledTime) {
@@ -172,12 +187,26 @@ const updateMatch = async (req, res) => {
       }
     }
 
-    // Validate that either streamingUrl or iframeUrl is provided for live matches
-    if (req.body.status === 'live' && !req.body.streamingUrl && !req.body.iframeUrl) {
+    // Parse streaming sources from the request body
+    let streamingSources = match.streamingSources;
+    if (req.body.streamingSources) {
+      try {
+        streamingSources = JSON.parse(req.body.streamingSources);
+      } catch (error) {
+        console.error('Error parsing streaming sources:', error);
+        if (req.files) {
+          await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        }
+        return res.status(400).json({ message: 'Invalid streaming sources format' });
+      }
+    }
+
+    // Validate that at least one streaming source is provided for live matches
+    if (req.body.status === 'live' && (!streamingSources || streamingSources.length === 0)) {
       if (req.files) {
         await deleteFiles(Object.values(req.files).flat().map(f => f.path));
       }
-      return res.status(400).json({ message: 'Either streaming URL or iframe URL is required for live matches' });
+      return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
     }
 
     // Validate scheduledTime for upcoming matches
@@ -188,7 +217,10 @@ const updateMatch = async (req, res) => {
       return res.status(400).json({ message: 'Scheduled time is required for upcoming matches' });
     }
 
-    const matchData = { ...req.body };
+    const matchData = {
+      ...req.body,
+      streamingSources
+    };
 
     // Convert scheduledTime string to Date object
     if (matchData.scheduledTime) {
@@ -246,14 +278,7 @@ const deleteMatch = async (req, res) => {
       await deleteFile(match.thumbnail);
     }
 
-    // Delete team logos if exist
-    for (const team of match.teams) {
-      if (team.logo) {
-        await deleteFile(team.logo);
-      }
-    }
-
-    await match.remove();
+    await match.deleteOne();
     res.json({ message: 'Match removed' });
   } catch (error) {
     console.error('Error deleting match:', error);

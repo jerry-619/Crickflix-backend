@@ -11,6 +11,9 @@ const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 // Load env vars
 dotenv.config();
 
+// Connect to MongoDB
+connectDB();
+
 // Create uploads directory if it doesn't exist
 const uploadDir = path.join(__dirname, 'uploads');
 const thumbnailDir = path.join(uploadDir, 'thumbnails');
@@ -98,13 +101,6 @@ app.use('/api/matches', matchRoutes);
 app.use('/api', streamRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-
-})
-.then(() => console.log('MongoDB Connected'))
-.catch(err => console.log('MongoDB connection error:', err));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

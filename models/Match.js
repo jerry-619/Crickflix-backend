@@ -30,6 +30,9 @@ const matchSchema = new mongoose.Schema({
   thumbnail: {
     type: String
   },
+  thumbnailPublicId: {
+    type: String
+  },
   streamingSources: {
     type: [streamingSourceSchema],
     default: []

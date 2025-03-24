@@ -20,6 +20,9 @@ const categorySchema = new mongoose.Schema({
   thumbnail: {
     type: String
   },
+  thumbnailPublicId: {
+    type: String
+  },
   isActive: {
     type: Boolean,
     default: true

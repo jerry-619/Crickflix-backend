@@ -1,32 +1,18 @@
 const Blog = require('../models/Blog');
 const asyncHandler = require('express-async-handler');
+const cloudinary = require('../config/cloudinary');
+const uploadToCloudinary = require('../utils/uploadToCloudinary');
 const fs = require('fs').promises;
 const path = require('path');
 
-const saveBase64Image = async (base64String) => {
+// Helper function to delete file from Cloudinary
+const deleteFromCloudinary = async (publicId) => {
   try {
-    // Extract the base64 data and file extension
-    const matches = base64String.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
-    
-    if (!matches || matches.length !== 3) {
-      throw new Error('Invalid image format');
-    }
-
-    const extension = matches[1];
-    const imageData = Buffer.from(matches[2], 'base64');
-
-    // Create a unique filename
-    const filename = `blog-${Date.now()}.${extension}`;
-    const uploadPath = path.join(__dirname, '..', 'uploads', 'thumbnails', filename);
-
-    // Save the file
-    await fs.writeFile(uploadPath, imageData);
-
-    // Return the relative path
-    return `/uploads/thumbnails/${filename}`;
+    if (!publicId) return;
+    await cloudinary.uploader.destroy(publicId);
+    console.log('File deleted from Cloudinary successfully:', publicId);
   } catch (error) {
-    console.error('Error saving image:', error);
-    throw new Error('Failed to save image');
+    console.error('Error deleting file from Cloudinary:', error);
   }
 };
 
@@ -36,15 +22,7 @@ const saveBase64Image = async (base64String) => {
 const getBlogs = asyncHandler(async (req, res) => {
   try {
     const blogs = await Blog.find().sort({ createdAt: -1 });
-    
-    // Transform thumbnail paths to full URLs
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const blogsWithUrls = blogs.map(blog => ({
-      ...blog.toObject(),
-      thumbnail: blog.thumbnail ? `${baseUrl}/${blog.thumbnail}` : null
-    }));
-    
-    res.json(blogsWithUrls);
+    res.json(blogs);
   } catch (error) {
     console.error('Error fetching blogs:', error);
     res.status(500).json({ message: 'Failed to fetch blogs' });
@@ -65,15 +43,8 @@ const getBlogBySlug = asyncHandler(async (req, res) => {
     if (!blog) {
       return res.status(404).json({ message: 'Blog not found' });
     }
-
-    // Transform thumbnail path to full URL
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const blogWithUrl = {
-      ...blog.toObject(),
-      thumbnail: blog.thumbnail ? `${baseUrl}/${blog.thumbnail}` : null
-    };
     
-    res.json(blogWithUrl);
+    res.json(blog);
   } catch (error) {
     console.error('Error fetching blog:', error);
     res.status(500).json({ message: 'Failed to fetch blog' });
@@ -96,29 +67,30 @@ const createBlog = asyncHandler(async (req, res) => {
     throw new Error('Please upload a thumbnail image');
   }
 
-  const thumbnailPath = req.file.path.replace(/\\/g, '/'); // Convert Windows path to URL format
-  const slug = title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
+  try {
+    // Upload thumbnail to Cloudinary
+    const uploadResult = await uploadToCloudinary(req.file);
 
-  const blog = await Blog.create({
-    title,
-    content,
-    author,
-    thumbnail: thumbnailPath,
-    slug,
-    isPublished: isPublished === 'true'
-  });
+    const slug = title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 
-  if (blog) {
-    // Transform thumbnail path to full URL for response
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const blogWithUrl = {
-      ...blog.toObject(),
-      thumbnail: blog.thumbnail ? `${baseUrl}/${blog.thumbnail}` : null
-    };
-    res.status(201).json(blogWithUrl);
-  } else {
-    res.status(400);
-    throw new Error('Invalid blog data');
+    const blog = await Blog.create({
+      title,
+      content,
+      author,
+      thumbnail: uploadResult.url,
+      thumbnailPublicId: uploadResult.public_id,
+      slug,
+      isPublished: isPublished === 'true'
+    });
+
+    res.status(201).json(blog);
+  } catch (error) {
+    // Clean up uploaded file if blog creation fails
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(console.error);
+    }
+    console.error('Error creating blog:', error);
+    res.status(400).json({ message: 'Failed to create blog' });
   }
 });
 
@@ -134,46 +106,44 @@ const updateBlog = asyncHandler(async (req, res) => {
   }
 
   const { title, content, author, isPublished } = req.body;
-  let thumbnailPath = blog.thumbnail; // Keep existing thumbnail by default
+  let thumbnailData = {};
 
-  if (req.file) {
-    thumbnailPath = req.file.path.replace(/\\/g, '/'); // Update thumbnail if new file uploaded
-    
-    // Delete old thumbnail if it exists
-    if (blog.thumbnail) {
-      const oldPath = path.join(__dirname, '..', blog.thumbnail);
-      try {
-        await fs.unlink(oldPath);
-      } catch (err) {
-        console.error('Error deleting old thumbnail:', err);
+  try {
+    if (req.file) {
+      // Delete old thumbnail from Cloudinary if it exists
+      if (blog.thumbnailPublicId) {
+        await deleteFromCloudinary(blog.thumbnailPublicId);
       }
+
+      // Upload new thumbnail to Cloudinary
+      const uploadResult = await uploadToCloudinary(req.file);
+      thumbnailData = {
+        thumbnail: uploadResult.url,
+        thumbnailPublicId: uploadResult.public_id
+      };
     }
-  }
 
-  const updatedBlog = await Blog.findByIdAndUpdate(
-    req.params.id,
-    {
-      title: title || blog.title,
-      content: content || blog.content,
-      author: author || blog.author,
-      thumbnail: thumbnailPath,
-      isPublished: isPublished === 'true',
-      slug: title ? title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-') : blog.slug
-    },
-    { new: true }
-  );
+    const updatedBlog = await Blog.findByIdAndUpdate(
+      req.params.id,
+      {
+        title: title || blog.title,
+        content: content || blog.content,
+        author: author || blog.author,
+        ...thumbnailData,
+        isPublished: isPublished === 'true',
+        slug: title ? title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-') : blog.slug
+      },
+      { new: true }
+    );
 
-  if (updatedBlog) {
-    // Transform thumbnail path to full URL for response
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const blogWithUrl = {
-      ...updatedBlog.toObject(),
-      thumbnail: updatedBlog.thumbnail ? `${baseUrl}/${updatedBlog.thumbnail}` : null
-    };
-    res.json(blogWithUrl);
-  } else {
-    res.status(400);
-    throw new Error('Could not update blog');
+    res.json(updatedBlog);
+  } catch (error) {
+    // Clean up uploaded file if update fails
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(console.error);
+    }
+    console.error('Error updating blog:', error);
+    res.status(400).json({ message: 'Could not update blog' });
   }
 });
 
@@ -181,24 +151,21 @@ const updateBlog = asyncHandler(async (req, res) => {
 // @route   DELETE /api/blogs/:id
 // @access  Private/Admin
 const deleteBlog = asyncHandler(async (req, res) => {
-  try {
-    const blog = await Blog.findById(req.params.id);
-    if (!blog) {
-      return res.status(404).json({ message: 'Blog not found' });
-    }
+  const blog = await Blog.findById(req.params.id);
 
-    // Delete thumbnail if it exists
-    if (blog.thumbnail) {
-      const thumbnailPath = path.join(__dirname, '..', blog.thumbnail);
-      try {
-        await fs.unlink(thumbnailPath);
-      } catch (err) {
-        console.error('Error deleting thumbnail:', err);
-      }
+  if (!blog) {
+    res.status(404);
+    throw new Error('Blog not found');
+  }
+
+  try {
+    // Delete thumbnail from Cloudinary if exists
+    if (blog.thumbnailPublicId) {
+      await deleteFromCloudinary(blog.thumbnailPublicId);
     }
 
     await blog.deleteOne();
-    res.json({ message: 'Blog removed' });
+    res.json({ message: 'Blog deleted successfully' });
   } catch (error) {
     console.error('Error deleting blog:', error);
     res.status(500).json({ message: 'Failed to delete blog' });

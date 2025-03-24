@@ -1,24 +1,18 @@
 const Match = require('../models/Match');
 const Category = require('../models/Category');
+const cloudinary = require('../config/cloudinary');
+const uploadToCloudinary = require('../utils/uploadToCloudinary');
 const fs = require('fs').promises;
 const path = require('path');
 
-// Helper function to delete file
-const deleteFile = async (filePath) => {
+// Helper function to delete file from Cloudinary
+const deleteFromCloudinary = async (publicId) => {
   try {
-    if (!filePath) return;
-    const fullPath = path.join(__dirname, '..', filePath);
-    await fs.unlink(fullPath);
-    console.log('File deleted successfully:', fullPath);
+    if (!publicId) return;
+    await cloudinary.uploader.destroy(publicId);
+    console.log('File deleted from Cloudinary successfully:', publicId);
   } catch (error) {
-    console.error('Error deleting file:', error);
-  }
-};
-
-// Helper function to delete multiple files
-const deleteFiles = async (filePaths) => {
-  for (const filePath of filePaths) {
-    await deleteFile(filePath);
+    console.error('Error deleting file from Cloudinary:', error);
   }
 };
 
@@ -41,14 +35,7 @@ const getMatches = async (req, res) => {
       .sort({ createdAt: -1 })
       .populate('category');
     
-    // Transform thumbnail paths to full URLs
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const matchesWithUrls = matches.map(match => ({
-      ...match.toObject(),
-      thumbnail: match.thumbnail ? `${baseUrl}/${match.thumbnail}` : null
-    }));
-    
-    res.json(matchesWithUrls);
+    res.json(matches);
   } catch (error) {
     console.error('Error fetching matches:', error);
     res.status(500).json({ message: 'Server error' });
@@ -67,14 +54,7 @@ const getMatch = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    // Transform thumbnail path to full URL
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const matchWithUrl = {
-      ...match.toObject(),
-      thumbnail: match.thumbnail ? `${baseUrl}/${match.thumbnail}` : null
-    };
-
-    res.json(matchWithUrl);
+    res.json(match);
   } catch (error) {
     console.error('Error fetching match:', error);
     res.status(500).json({ message: 'Server error' });
@@ -90,7 +70,7 @@ const createMatch = async (req, res) => {
     const category = await Category.findById(req.body.category);
     if (!category) {
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(400).json({ message: 'Invalid category' });
     }
@@ -102,7 +82,7 @@ const createMatch = async (req, res) => {
     } catch (error) {
       console.error('Error parsing streaming sources:', error);
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(400).json({ message: 'Invalid streaming sources format' });
     }
@@ -110,7 +90,7 @@ const createMatch = async (req, res) => {
     // Validate that at least one streaming source is provided for live matches
     if (req.body.status === 'live' && (!streamingSources || streamingSources.length === 0)) {
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
     }
@@ -118,7 +98,7 @@ const createMatch = async (req, res) => {
     // Validate scheduledTime for upcoming matches
     if (req.body.status === 'upcoming' && !req.body.scheduledTime) {
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(400).json({ message: 'Scheduled time is required for upcoming matches' });
     }
@@ -134,29 +114,20 @@ const createMatch = async (req, res) => {
     }
     
     // Handle file uploads
-    if (req.files) {
-      // Handle thumbnail
-      if (req.files.thumbnail) {
-        matchData.thumbnail = req.files.thumbnail[0].path.replace(/\\/g, '/');
-      }
+    if (req.files && req.files.thumbnail) {
+      const uploadResult = await uploadToCloudinary(req.files.thumbnail[0]);
+      matchData.thumbnail = uploadResult.url;
+      matchData.thumbnailPublicId = uploadResult.public_id;
     }
 
     // Create match
     const match = await Match.create(matchData);
-    
-    // Return full URL for thumbnail
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const matchWithUrl = {
-      ...match.toObject(),
-      thumbnail: match.thumbnail ? `${baseUrl}/${match.thumbnail}` : null
-    };
-
-    res.status(201).json(matchWithUrl);
+    res.status(201).json(match);
   } catch (error) {
     console.error('Error creating match:', error);
     // Delete uploaded files if match creation fails
     if (req.files) {
-      await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+      await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
     }
     res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -171,7 +142,7 @@ const updateMatch = async (req, res) => {
 
     if (!match) {
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(404).json({ message: 'Match not found' });
     }
@@ -181,7 +152,7 @@ const updateMatch = async (req, res) => {
       const category = await Category.findById(req.body.category);
       if (!category) {
         if (req.files) {
-          await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
         }
         return res.status(400).json({ message: 'Invalid category' });
       }
@@ -195,7 +166,7 @@ const updateMatch = async (req, res) => {
       } catch (error) {
         console.error('Error parsing streaming sources:', error);
         if (req.files) {
-          await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
         }
         return res.status(400).json({ message: 'Invalid streaming sources format' });
       }
@@ -204,7 +175,7 @@ const updateMatch = async (req, res) => {
     // Validate that at least one streaming source is provided for live matches
     if (req.body.status === 'live' && (!streamingSources || streamingSources.length === 0)) {
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
     }
@@ -212,7 +183,7 @@ const updateMatch = async (req, res) => {
     // Validate scheduledTime for upcoming matches
     if (req.body.status === 'upcoming' && !req.body.scheduledTime) {
       if (req.files) {
-        await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
       return res.status(400).json({ message: 'Scheduled time is required for upcoming matches' });
     }
@@ -228,14 +199,16 @@ const updateMatch = async (req, res) => {
     }
 
     // Handle file uploads
-    if (req.files) {
-      // Handle thumbnail
-      if (req.files.thumbnail) {
-        if (match.thumbnail) {
-          await deleteFile(match.thumbnail);
-        }
-        matchData.thumbnail = req.files.thumbnail[0].path.replace(/\\/g, '/');
+    if (req.files && req.files.thumbnail) {
+      // Delete old thumbnail from Cloudinary if it exists
+      if (match.thumbnailPublicId) {
+        await deleteFromCloudinary(match.thumbnailPublicId);
       }
+      
+      // Upload new thumbnail to Cloudinary
+      const uploadResult = await uploadToCloudinary(req.files.thumbnail[0]);
+      matchData.thumbnail = uploadResult.url;
+      matchData.thumbnailPublicId = uploadResult.public_id;
     }
 
     const updatedMatch = await Match.findByIdAndUpdate(
@@ -244,19 +217,12 @@ const updateMatch = async (req, res) => {
       { new: true, runValidators: true }
     ).populate('category', 'name slug');
 
-    // Return full URL for thumbnail
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const matchWithUrl = {
-      ...updatedMatch.toObject(),
-      thumbnail: updatedMatch.thumbnail ? `${baseUrl}/${updatedMatch.thumbnail}` : null
-    };
-
-    res.json(matchWithUrl);
+    res.json(updatedMatch);
   } catch (error) {
     console.error('Error updating match:', error);
     // Delete uploaded files if update fails
     if (req.files) {
-      await deleteFiles(Object.values(req.files).flat().map(f => f.path));
+      await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
     }
     res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -273,9 +239,9 @@ const deleteMatch = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    // Delete thumbnail if exists
-    if (match.thumbnail) {
-      await deleteFile(match.thumbnail);
+    // Delete thumbnail from Cloudinary if exists
+    if (match.thumbnailPublicId) {
+      await deleteFromCloudinary(match.thumbnailPublicId);
     }
 
     await match.deleteOne();

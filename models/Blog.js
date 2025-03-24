@@ -19,6 +19,9 @@ const blogSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Blog thumbnail is required']
   },
+  thumbnailPublicId: {
+    type: String
+  },
   author: {
     type: String,
     required: [true, 'Author name is required']

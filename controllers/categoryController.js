@@ -1,17 +1,18 @@
 const Category = require('../models/Category');
 const Match = require('../models/Match');
+const cloudinary = require('../config/cloudinary');
+const uploadToCloudinary = require('../utils/uploadToCloudinary');
 const fs = require('fs').promises;
 const path = require('path');
 
-// Helper function to delete file
-const deleteFile = async (filePath) => {
+// Helper function to delete file from Cloudinary
+const deleteFromCloudinary = async (publicId) => {
   try {
-    if (!filePath) return;
-    const fullPath = path.join(__dirname, '..', filePath);
-    await fs.unlink(fullPath);
-    console.log('File deleted successfully:', fullPath);
+    if (!publicId) return;
+    await cloudinary.uploader.destroy(publicId);
+    console.log('File deleted from Cloudinary successfully:', publicId);
   } catch (error) {
-    console.error('Error deleting file:', error);
+    console.error('Error deleting file from Cloudinary:', error);
   }
 };
 
@@ -21,15 +22,7 @@ const deleteFile = async (filePath) => {
 const getCategories = async (req, res) => {
   try {
     const categories = await Category.find().sort({ createdAt: -1 });
-    
-    // Transform thumbnail paths to full URLs
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const categoriesWithUrls = categories.map(cat => ({
-      ...cat.toObject(),
-      thumbnail: cat.thumbnail ? `${baseUrl}/${cat.thumbnail}` : null
-    }));
-    
-    res.json(categoriesWithUrls);
+    res.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
     res.status(500).json({ message: 'Server error' });
@@ -47,14 +40,7 @@ const getCategoryBySlug = async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // Transform thumbnail path to full URL
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const categoryWithUrl = {
-      ...category.toObject(),
-      thumbnail: category.thumbnail ? `${baseUrl}/${category.thumbnail}` : null
-    };
-
-    res.json(categoryWithUrl);
+    res.json(category);
   } catch (error) {
     console.error('Error fetching category:', error);
     res.status(500).json({ message: 'Server error' });
@@ -70,26 +56,22 @@ const createCategory = async (req, res) => {
       return res.status(400).json({ message: 'Thumbnail is required' });
     }
 
+    // Upload thumbnail to Cloudinary
+    const uploadResult = await uploadToCloudinary(req.file);
+
     const categoryData = {
       name: req.body.name,
       description: req.body.description || '',
       isActive: req.body.isActive === 'true',
-      thumbnail: `uploads/thumbnails/${req.file.filename}`
+      thumbnail: uploadResult.url,
+      thumbnailPublicId: uploadResult.public_id
     };
 
     const category = await Category.create(categoryData);
-    
-    // Return full URL for thumbnail
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const categoryWithUrl = {
-      ...category.toObject(),
-      thumbnail: `${baseUrl}/${category.thumbnail}`
-    };
-
-    res.status(201).json(categoryWithUrl);
+    res.status(201).json(category);
   } catch (error) {
     if (req.file) {
-      await deleteFile(`uploads/thumbnails/${req.file.filename}`);
+      await fs.unlink(req.file.path).catch(console.error);
     }
     console.error('Error creating category:', error);
     if (error.code === 11000) {
@@ -109,7 +91,7 @@ const updateCategory = async (req, res) => {
 
     if (!category) {
       if (req.file) {
-        await deleteFile(`uploads/thumbnails/${req.file.filename}`);
+        await fs.unlink(req.file.path).catch(console.error);
       }
       return res.status(404).json({ message: 'Category not found' });
     }
@@ -118,11 +100,15 @@ const updateCategory = async (req, res) => {
     
     // Handle thumbnail update
     if (req.file) {
-      // Delete old thumbnail if it exists
-      if (category.thumbnail) {
-        await deleteFile(category.thumbnail);
+      // Delete old thumbnail from Cloudinary if it exists
+      if (category.thumbnailPublicId) {
+        await deleteFromCloudinary(category.thumbnailPublicId);
       }
-      categoryData.thumbnail = `uploads/thumbnails/${req.file.filename}`;
+
+      // Upload new thumbnail to Cloudinary
+      const uploadResult = await uploadToCloudinary(req.file);
+      categoryData.thumbnail = uploadResult.url;
+      categoryData.thumbnailPublicId = uploadResult.public_id;
     }
 
     const updatedCategory = await Category.findByIdAndUpdate(
@@ -131,18 +117,11 @@ const updateCategory = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    // Return full URL for thumbnail
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const categoryWithUrl = {
-      ...updatedCategory.toObject(),
-      thumbnail: updatedCategory.thumbnail ? `${baseUrl}/${updatedCategory.thumbnail}` : null
-    };
-
-    res.json(categoryWithUrl);
+    res.json(updatedCategory);
   } catch (error) {
     // Delete uploaded file if update fails
     if (req.file) {
-      await deleteFile(`uploads/thumbnails/${req.file.filename}`);
+      await fs.unlink(req.file.path).catch(console.error);
     }
 
     console.error('Error updating category:', error);
@@ -172,15 +151,12 @@ const deleteCategory = async (req, res) => {
       });
     }
 
-    // Delete thumbnail if it exists
-    if (category.thumbnail) {
-      await deleteFile(category.thumbnail);
+    // Delete thumbnail from Cloudinary if it exists
+    if (category.thumbnailPublicId) {
+      await deleteFromCloudinary(category.thumbnailPublicId);
     }
 
-    // Use deleteOne() instead of remove()
     await Category.deleteOne({ _id: req.params.id });
-    // Or alternatively: await category.deleteOne();
-
     res.json({ message: 'Category removed successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);

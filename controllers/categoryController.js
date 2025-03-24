@@ -160,7 +160,6 @@ const updateCategory = async (req, res) => {
 const deleteCategory = async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
-
     if (!category) {
       return res.status(404).json({ message: 'Category not found' });
     }
@@ -178,11 +177,14 @@ const deleteCategory = async (req, res) => {
       await deleteFile(category.thumbnail);
     }
 
-    await category.remove();
-    res.json({ message: 'Category removed' });
+    // Use deleteOne() instead of remove()
+    await Category.deleteOne({ _id: req.params.id });
+    // Or alternatively: await category.deleteOne();
+
+    res.json({ message: 'Category removed successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 

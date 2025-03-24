@@ -5,6 +5,8 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const connectDB = require('./config/db');
+const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
 // Load env vars
 dotenv.config();

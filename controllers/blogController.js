@@ -84,49 +84,34 @@ const getBlogBySlug = asyncHandler(async (req, res) => {
 // @route   POST /api/blogs
 // @access  Private/Admin
 const createBlog = asyncHandler(async (req, res) => {
-  try {
-    console.log('Creating blog with data:', req.body);
-    console.log('Files:', req.files);
+  const { title, content, author } = req.body;
 
-    const { title, content, author, slug, isPublished } = req.body;
+  if (!title || !content || !author) {
+    res.status(400);
+    throw new Error('Please fill in all required fields');
+  }
 
-    // Handle file upload
-    let thumbnailPath = null;
-    if (req.files && req.files.thumbnail) {
-      const file = req.files.thumbnail;
-      const filename = `blog-${Date.now()}${path.extname(file.name)}`;
-      const uploadPath = path.join(__dirname, '..', 'uploads', 'thumbnails', filename);
-      
-      await file.mv(uploadPath);
-      thumbnailPath = `/uploads/thumbnails/${filename}`;
-    } else if (req.body.thumbnail && req.body.thumbnail.startsWith('data:image')) {
-      thumbnailPath = await saveBase64Image(req.body.thumbnail);
-    }
+  if (!req.file) {
+    res.status(400);
+    throw new Error('Please upload a thumbnail image');
+  }
 
-    if (!thumbnailPath) {
-      return res.status(400).json({ message: 'Blog thumbnail is required' });
-    }
+  const thumbnailPath = req.file.path.replace(/\\/g, '/'); // Convert Windows path to URL format
+  const slug = title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 
-    const blog = await Blog.create({
-      title,
-      content,
-      thumbnail: thumbnailPath,
-      author,
-      slug,
-      isPublished: isPublished === 'true'
-    });
+  const blog = await Blog.create({
+    title,
+    content,
+    author,
+    thumbnail: thumbnailPath,
+    slug
+  });
 
-    // Transform thumbnail path to full URL
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const blogWithUrl = {
-      ...blog.toObject(),
-      thumbnail: blog.thumbnail ? `${baseUrl}${blog.thumbnail}` : null
-    };
-
-    res.status(201).json(blogWithUrl);
-  } catch (error) {
-    console.error('Error creating blog:', error);
-    res.status(500).json({ message: error.message || 'Failed to create blog' });
+  if (blog) {
+    res.status(201).json(blog);
+  } else {
+    res.status(400);
+    throw new Error('Invalid blog data');
   }
 });
 
@@ -134,54 +119,37 @@ const createBlog = asyncHandler(async (req, res) => {
 // @route   PUT /api/blogs/:id
 // @access  Private/Admin
 const updateBlog = asyncHandler(async (req, res) => {
-  try {
-    const blog = await Blog.findById(req.params.id);
-    if (!blog) {
-      return res.status(404).json({ message: 'Blog not found' });
-    }
+  const blog = await Blog.findById(req.params.id);
 
-    const { thumbnail, title, content, author, slug, isActive } = req.body;
-    
-    // Handle base64 image if new image is uploaded
-    let thumbnailPath = thumbnail;
-    if (thumbnail && thumbnail.startsWith('data:image')) {
-      thumbnailPath = await saveBase64Image(thumbnail);
+  if (!blog) {
+    res.status(404);
+    throw new Error('Blog not found');
+  }
 
-      // Delete old thumbnail if it exists
-      if (blog.thumbnail) {
-        const oldPath = path.join(__dirname, '..', blog.thumbnail.replace(/^\//, ''));
-        try {
-          await fs.unlink(oldPath);
-        } catch (err) {
-          console.error('Error deleting old thumbnail:', err);
-        }
-      }
-    }
+  const { title, content, author } = req.body;
+  let thumbnailPath = blog.thumbnail; // Keep existing thumbnail by default
 
-    const updatedBlog = await Blog.findByIdAndUpdate(
-      req.params.id,
-      {
-        title,
-        content,
-        thumbnail: thumbnailPath,
-        author,
-        slug,
-        isActive
-      },
-      { new: true, runValidators: true }
-    );
+  if (req.file) {
+    thumbnailPath = req.file.path.replace(/\\/g, '/'); // Update thumbnail if new file uploaded
+  }
 
-    // Transform thumbnail path to full URL
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const blogWithUrl = {
-      ...updatedBlog.toObject(),
-      thumbnail: updatedBlog.thumbnail ? `${baseUrl}${updatedBlog.thumbnail}` : null
-    };
+  const updatedBlog = await Blog.findByIdAndUpdate(
+    req.params.id,
+    {
+      title: title || blog.title,
+      content: content || blog.content,
+      author: author || blog.author,
+      thumbnail: thumbnailPath,
+      slug: title ? title.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-') : blog.slug
+    },
+    { new: true }
+  );
 
-    res.json(blogWithUrl);
-  } catch (error) {
-    console.error('Error updating blog:', error);
-    res.status(500).json({ message: error.message || 'Failed to update blog' });
+  if (updatedBlog) {
+    res.json(updatedBlog);
+  } else {
+    res.status(400);
+    throw new Error('Could not update blog');
   }
 });
 

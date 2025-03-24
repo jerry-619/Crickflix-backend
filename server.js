@@ -3,35 +3,45 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
 const multer = require('multer');
-const fileUpload = require('express-fileupload');
 
 // Load env vars
 dotenv.config();
 
 // Create uploads directory if it doesn't exist
-const createUploadDirs = async () => {
-  const uploadsDir = path.join(__dirname, 'uploads');
-  const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
+const uploadDir = path.join(__dirname, 'uploads');
+const thumbnailDir = path.join(uploadDir, 'thumbnails');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(thumbnailDir)) fs.mkdirSync(thumbnailDir, { recursive: true });
 
-  try {
-    // Create directories with proper permissions
-    await fs.mkdir(uploadsDir, { recursive: true });
-    await fs.mkdir(thumbnailsDir, { recursive: true });
-    
-    // Set proper permissions (read/write for owner and group)
-    await fs.chmod(uploadsDir, 0o775);
-    await fs.chmod(thumbnailsDir, 0o775);
-    
-    console.log('Upload directories created successfully');
-  } catch (error) {
-    console.error('Error creating upload directories:', error);
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/thumbnails/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG and GIF images are allowed'), false);
   }
 };
 
-// Create upload directories
-createUploadDirs();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: fileFilter
+});
 
 // Route files
 const authRoutes = require('./routes/authRoutes');
@@ -44,63 +54,23 @@ const blogRoutes = require('./routes/blogRoutes');
 const app = express();
 
 // Enable CORS with proper configuration
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:5173',  // Vite dev server
-      'http://localhost:3000',  // Frontend
-      'http://localhost:3001',  // Admin
-      process.env.FRONTEND_URL,
-      process.env.ADMIN_URL
-    ].filter(Boolean);
-
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Content-Length'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
-};
-
-app.use(cors(corsOptions));
-
-// Increase payload limits first
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// File Upload Middleware with improved configuration
-app.use(fileUpload({
-  createParentPath: true,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max file size
-    files: 1 // Allow only 1 file per request
-  },
-  abortOnLimit: true,
-  useTempFiles: true,
-  tempFileDir: '/tmp/',
-  parseNested: true,
-  debug: process.env.NODE_ENV === 'development',
-  safeFileNames: true,
-  preserveExtension: true,
-  uploadTimeout: 30000, // 30 seconds
-  responseOnLimit: 'File size limit has been reached'
+app.use(cors({
+  origin: [
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_URL,
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
+  credentials: true
 }));
 
-// Static folder with proper CORS headers
-app.use('/uploads', (req, res, next) => {
-  // Allow from any origin
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
+// Increase payload limits
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Static folder with proper path and CORS headers
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -112,8 +82,7 @@ app.use('/api/blogs', blogRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+
 })
 .then(() => console.log('MongoDB Connected'))
 .catch(err => console.log('MongoDB connection error:', err));
@@ -136,22 +105,12 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ message: 'Request entity too large. Please reduce the file size.' });
   }
-
-  // Handle CORS errors
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ message: 'CORS policy: Origin not allowed' });
-  }
-
-  // Handle file upload errors
-  if (err.message && err.message.includes('Unexpected end of form')) {
-    return res.status(400).json({ message: 'File upload failed. Please try again.' });
-  }
   
-  res.status(500).json({ 
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
+  res.status(500).json({ message: 'Something went wrong!' });
 });
+
+// Export upload middleware for use in routes
+module.exports = { upload };
 
 const PORT = process.env.PORT || 5000;
 

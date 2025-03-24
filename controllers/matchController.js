@@ -11,9 +11,9 @@ const deleteFromCloudinary = async (publicId) => {
   try {
     if (!publicId) return;
     await cloudinary.uploader.destroy(publicId);
-    console.log('File deleted from Cloudinary successfully:', publicId);
+    console.log('Cloudinary: File deleted successfully');
   } catch (error) {
-    console.error('Error deleting file from Cloudinary:', error);
+    console.error('Cloudinary: Delete operation failed');
   }
 };
 
@@ -81,7 +81,7 @@ const createMatch = asyncHandler(async (req, res) => {
     try {
       streamingSources = JSON.parse(req.body.streamingSources || '[]');
     } catch (error) {
-      console.error('Error parsing streaming sources:', error);
+      console.error('Error parsing streaming sources');
       if (req.files) {
         await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
       }
@@ -136,7 +136,7 @@ const createMatch = asyncHandler(async (req, res) => {
     
     res.status(201).json(populatedMatch);
   } catch (error) {
-    console.error('Error creating match:', error);
+    console.error('Error creating match');
     // Delete uploaded files if match creation fails
     if (req.files) {
       await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
@@ -176,7 +176,7 @@ const updateMatch = asyncHandler(async (req, res) => {
       try {
         streamingSources = JSON.parse(req.body.streamingSources);
       } catch (error) {
-        console.error('Error parsing streaming sources:', error);
+        console.error('Error parsing streaming sources');
         if (req.files) {
           await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
         }
@@ -245,7 +245,7 @@ const updateMatch = asyncHandler(async (req, res) => {
 
     res.json(updatedMatch);
   } catch (error) {
-    console.error('Error updating match:', error);
+    console.error('Error updating match');
     // Delete uploaded files if update fails
     if (req.files) {
       await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
@@ -277,7 +277,7 @@ const deleteMatch = asyncHandler(async (req, res) => {
 
     res.json({ message: 'Match removed', id: req.params.id });
   } catch (error) {
-    console.error('Error deleting match:', error);
+    console.error('Error deleting match');
     res.status(500).json({ message: error.message || 'Server error' });
   }
 });

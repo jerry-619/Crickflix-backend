@@ -87,12 +87,18 @@ const createMatch = async (req, res) => {
       return res.status(400).json({ message: 'Invalid streaming sources format' });
     }
 
-    // Validate that at least one streaming source is provided for live matches
-    if (req.body.status === 'live' && (!streamingSources || streamingSources.length === 0)) {
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
+    // Validate streaming sources for live matches
+    if (req.body.status === 'live') {
+      // Check if either old or new streaming method is provided
+      const hasOldStreaming = req.body.streamingUrl || req.body.iframeUrl;
+      const hasNewStreaming = streamingSources && streamingSources.length > 0;
+
+      if (!hasOldStreaming && !hasNewStreaming) {
+        if (req.files) {
+          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
+        }
+        return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
       }
-      return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
     }
 
     // Validate scheduledTime for upcoming matches
@@ -172,12 +178,18 @@ const updateMatch = async (req, res) => {
       }
     }
 
-    // Validate that at least one streaming source is provided for live matches
-    if (req.body.status === 'live' && (!streamingSources || streamingSources.length === 0)) {
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
+    // Validate streaming sources for live matches
+    if (req.body.status === 'live') {
+      // Check if either old or new streaming method is provided
+      const hasOldStreaming = req.body.streamingUrl || req.body.iframeUrl || match.streamingUrl || match.iframeUrl;
+      const hasNewStreaming = streamingSources && streamingSources.length > 0;
+
+      if (!hasOldStreaming && !hasNewStreaming) {
+        if (req.files) {
+          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
+        }
+        return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
       }
-      return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
     }
 
     // Validate scheduledTime for upcoming matches

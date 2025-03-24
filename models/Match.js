@@ -33,6 +33,17 @@ const matchSchema = new mongoose.Schema({
   thumbnailPublicId: {
     type: String
   },
+  streamingUrl: {
+    type: String
+  },
+  iframeUrl: {
+    type: String
+  },
+  streamType: {
+    type: String,
+    enum: ['m3u8', 'dash', 'mp4', 'iframe', 'other'],
+    default: 'm3u8'
+  },
   streamingSources: {
     type: [streamingSourceSchema],
     default: []
@@ -63,6 +74,17 @@ const matchSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+matchSchema.pre('save', function(next) {
+  if (this.streamingUrl && (!this.streamingSources || this.streamingSources.length === 0)) {
+    this.streamingSources = [{
+      name: 'Default Source',
+      url: this.streamingUrl,
+      type: this.streamType || 'm3u8'
+    }];
+  }
+  next();
 });
 
 const Match = mongoose.model('Match', matchSchema);

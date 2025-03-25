@@ -9,7 +9,6 @@ const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const checkMaintenance = require('./middleware/maintenance');
 
 // Load env vars
 dotenv.config();
@@ -87,9 +86,6 @@ const upload = multer({
 
 // Static folder
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Add before routes
-app.use(checkMaintenance);
 
 // Route files
 const authRoutes = require('./routes/authRoutes');

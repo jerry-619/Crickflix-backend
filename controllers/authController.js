@@ -5,11 +5,11 @@ const User = require('../models/User');
 // Generate tokens
 const generateTokens = (userId) => {
   const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: '30d'
+    expiresIn: '1d'  // Access token expires in 1 day
   });
 
   const refreshToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: '30d'
+    expiresIn: '30d'  // Refresh token expires in 30 days
   });
 
   return { accessToken, refreshToken };
@@ -32,8 +32,6 @@ const login = async (req, res) => {
 
     // Check for user
     const user = await User.findOne({ email });
-    console.log('Login attempt with:', { email, passwordLength: password.length });
-    console.log('User found:', user ? 'Yes' : 'No');
 
     if (!user) {
       return res.status(401).json({
@@ -43,12 +41,7 @@ const login = async (req, res) => {
     }
 
     // Check password
-    console.log('Comparing passwords:');
-    console.log('Entered password length:', password.length);
-    console.log('Stored hash length:', user.password.length);
-    
     const isMatch = await bcrypt.compare(password, user.password);
-    console.log('Password match:', isMatch);
 
     if (!isMatch) {
       return res.status(401).json({

@@ -1,11 +1,18 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 
-// Generate JWT
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '30d'
+// Generate tokens
+const generateTokens = (userId) => {
+  const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+    expiresIn: '1d'
   });
+
+  const refreshToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+    expiresIn: '7d'
+  });
+
+  return { accessToken, refreshToken };
 };
 
 // @desc    Login user
@@ -13,48 +20,60 @@ const generateToken = (id) => {
 // @access  Public
 const login = async (req, res) => {
   try {
-    console.log('Login attempt with:', {
-      email: req.body.email,
-      passwordLength: req.body?.password?.length
-    });
+    const { email, password } = req.body;
 
-    const user = await User.findOne({ email: req.body.email });
+    // Validate email & password
+    if (!email || !password) {
+      return res.status(400).json({
+        message: 'Please provide email and password',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Check for user
+    const user = await User.findOne({ email });
+    console.log('Login attempt with:', { email, passwordLength: password.length });
     console.log('User found:', user ? 'Yes' : 'No');
 
     if (!user) {
-      console.log('Login failed: User not found');
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({
+        message: 'Invalid credentials',
+        code: 'INVALID_CREDENTIALS'
+      });
     }
 
-    if (!user.isActive) {
-      console.log('Login failed: User account is disabled');
-      return res.status(401).json({ message: 'Your account has been disabled' });
-    }
-
-    const isMatch = await user.matchPassword(req.body.password);
+    // Check password
+    console.log('Comparing passwords:');
+    console.log('Entered password length:', password.length);
+    console.log('Stored hash length:', user.password.length);
+    
+    const isMatch = await bcrypt.compare(password, user.password);
     console.log('Password match:', isMatch);
 
     if (!isMatch) {
-      console.log('Login failed: Password mismatch');
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({
+        message: 'Invalid credentials',
+        code: 'INVALID_CREDENTIALS'
+      });
     }
 
-    const token = generateToken(user._id);
-    console.log('Login successful, token generated');
+    // Generate tokens
+    const { accessToken, refreshToken } = generateTokens(user._id);
 
     res.json({
-      token,
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar
-      }
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      token: accessToken,
+      refreshToken
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({
+      message: 'Server error during login',
+      code: 'SERVER_ERROR'
+    });
   }
 };
 
@@ -115,8 +134,111 @@ const setupAdmin = async (req, res) => {
   }
 };
 
+// Refresh token
+const refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        message: 'Refresh token is required',
+        code: 'NO_REFRESH_TOKEN'
+      });
+    }
+
+    // Verify refresh token
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    
+    // Get user
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return res.status(401).json({
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Generate new tokens
+    const tokens = generateTokens(user._id);
+
+    res.json({
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        message: 'Refresh token expired',
+        code: 'REFRESH_TOKEN_EXPIRED'
+      });
+    }
+    
+    res.status(401).json({
+      message: 'Invalid refresh token',
+      code: 'INVALID_REFRESH_TOKEN'
+    });
+  }
+};
+
+// Register user
+const register = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: 'Please provide all required fields',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Check if user exists
+    const userExists = await User.findOne({ email });
+
+    if (userExists) {
+      return res.status(400).json({
+        message: 'User already exists',
+        code: 'USER_EXISTS'
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword
+    });
+
+    if (user) {
+      const { accessToken, refreshToken } = generateTokens(user._id);
+
+      res.status(201).json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        token: accessToken,
+        refreshToken
+      });
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({
+      message: 'Server error during registration',
+      code: 'SERVER_ERROR'
+    });
+  }
+};
+
 module.exports = {
   login,
   verifyToken,
-  setupAdmin
+  setupAdmin,
+  refreshToken,
+  register
 }; 

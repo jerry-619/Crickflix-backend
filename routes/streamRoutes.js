@@ -9,16 +9,6 @@ router.get('/stream-proxy', async (req, res) => {
       return res.status(400).json({ message: 'URL parameter is required' });
     }
 
-    // Prevent recursive proxy calls
-    if (url.includes('/stream-proxy')) {
-      const match = url.match(/url=([^&]+)/);
-      if (match) {
-        const actualUrl = decodeURIComponent(match[1]);
-        return res.redirect(307, `${req.baseUrl}/stream-proxy?url=${encodeURIComponent(actualUrl)}`);
-      }
-      return res.status(400).json({ message: 'Invalid proxy URL' });
-    }
-
     // Check if the URL is an m3u8 manifest, mpd manifest, or a segment
     const isManifest = url.endsWith('.m3u8') || url.endsWith('.mpd');
     const isSegment = url.includes('/hlsr/') || url.includes('.ts') || url.includes('.m4s');
@@ -36,12 +26,12 @@ router.get('/stream-proxy', async (req, res) => {
 
     // Add referer if it's a segment request
     if (isSegment) {
+      // Extract the base URL from the segment URL
       const baseUrl = url.split('/').slice(0, 3).join('/');
       headers['Referer'] = baseUrl;
     }
 
     console.log('Proxying request to:', url);
-    console.log('Headers:', headers);
 
     const response = await axios({
       method: 'get',
@@ -51,7 +41,7 @@ router.get('/stream-proxy', async (req, res) => {
       maxRedirects: 5,
       timeout: 30000,
       validateStatus: function (status) {
-        return status >= 200 && status < 300;
+        return status >= 200 && status < 300; // Accept only success status codes
       }
     });
 
@@ -79,24 +69,8 @@ router.get('/stream-proxy', async (req, res) => {
       return res.status(200).end();
     }
 
-    // For m3u8 manifests, rewrite the URLs to use our proxy
-    if (isManifest && typeof response.data === 'string') {
-      const manifestLines = response.data.split('\n');
-      const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-      
-      const rewrittenManifest = manifestLines.map(line => {
-        if (line.startsWith('#')) return line;
-        if (!line.trim()) return line;
-        
-        // Handle both absolute and relative URLs
-        const segmentUrl = line.startsWith('http') ? line : new URL(line, baseUrl).toString();
-        return `${req.protocol}://${req.get('host')}${req.baseUrl}/stream-proxy?url=${encodeURIComponent(segmentUrl)}`;
-      }).join('\n');
-      
-      res.send(rewrittenManifest);
-    } else {
-      res.send(response.data);
-    }
+    // Send the response
+    res.send(response.data);
 
   } catch (error) {
     console.error('Stream proxy error:', error.message);

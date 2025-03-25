@@ -26,8 +26,12 @@ router.get('/stream-proxy', async (req, res) => {
 
     // Add referer if it's a segment request
     if (isSegment) {
-      headers['Referer'] = url.split('/').slice(0, 3).join('/');
+      // Extract the base URL from the segment URL
+      const baseUrl = url.split('/').slice(0, 3).join('/');
+      headers['Referer'] = baseUrl;
     }
+
+    console.log('Proxying request to:', url);
 
     const response = await axios({
       method: 'get',
@@ -63,7 +67,15 @@ router.get('/stream-proxy', async (req, res) => {
     res.send(response.data);
 
   } catch (error) {
-    console.error('Stream proxy error:', error);
+    console.error('Stream proxy error:', error.message);
+    if (error.response) {
+      console.error('Error response:', {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+    }
+    
     if (!res.headersSent) {
       const status = error.response?.status || 500;
       const message = error.response?.data || error.message;

@@ -13,21 +13,32 @@ router.get('/stream-proxy', async (req, res) => {
     const isManifest = url.endsWith('.m3u8');
     const isSegment = url.includes('/hlsr/') || url.includes('.ts');
 
+    // Add necessary headers for the request
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
+    };
+
+    // Add referer if it's a segment request
+    if (isSegment) {
+      headers['Referer'] = url.split('/').slice(0, 3).join('/');
+    }
+
     const response = await axios({
       method: 'get',
       url: url,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-      },
+      headers: headers,
       responseType: isSegment ? 'arraybuffer' : 'text',
       maxRedirects: 5,
       timeout: 30000,
+      validateStatus: function (status) {
+        return status >= 200 && status < 300; // Accept only success status codes
+      }
     });
 
     // Set appropriate content type
@@ -49,18 +60,17 @@ router.get('/stream-proxy', async (req, res) => {
     }
 
     // Send the response
-    if (isSegment) {
-      res.send(response.data);
-    } else {
-      res.send(response.data);
-    }
+    res.send(response.data);
 
   } catch (error) {
     console.error('Stream proxy error:', error);
     if (!res.headersSent) {
-      res.status(error.response?.status || 500).json({ 
+      const status = error.response?.status || 500;
+      const message = error.response?.data || error.message;
+      
+      res.status(status).json({ 
         message: 'Failed to proxy stream',
-        error: error.message,
+        error: message,
         details: error.response?.data
       });
     }

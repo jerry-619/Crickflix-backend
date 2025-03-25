@@ -9,9 +9,9 @@ router.get('/stream-proxy', async (req, res) => {
       return res.status(400).json({ message: 'URL parameter is required' });
     }
 
-    // Check if the URL is an m3u8 manifest or a segment
-    const isManifest = url.endsWith('.m3u8');
-    const isSegment = url.includes('/hlsr/') || url.includes('.ts');
+    // Check if the URL is an m3u8 manifest, mpd manifest, or a segment
+    const isManifest = url.endsWith('.m3u8') || url.endsWith('.mpd');
+    const isSegment = url.includes('/hlsr/') || url.includes('.ts') || url.includes('.m4s');
 
     // Add necessary headers for the request
     const headers = {
@@ -46,10 +46,16 @@ router.get('/stream-proxy', async (req, res) => {
     });
 
     // Set appropriate content type
-    if (isManifest) {
+    if (url.endsWith('.m3u8')) {
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+    } else if (url.endsWith('.mpd')) {
+      res.setHeader('Content-Type', 'application/dash+xml');
     } else if (isSegment) {
-      res.setHeader('Content-Type', 'video/MP2T');
+      if (url.endsWith('.ts')) {
+        res.setHeader('Content-Type', 'video/MP2T');
+      } else if (url.endsWith('.m4s')) {
+        res.setHeader('Content-Type', 'video/mp4');
+      }
     }
 
     // Set CORS headers

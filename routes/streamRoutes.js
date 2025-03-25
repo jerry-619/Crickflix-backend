@@ -13,9 +13,23 @@ router.get('/stream-proxy', async (req, res) => {
     const isManifest = url.endsWith('.m3u8') || url.endsWith('.mpd');
     const isSegment = url.includes('/hlsr/') || url.includes('.ts') || url.includes('.m4s');
 
+    // Parse URL parameters
+    const urlObj = new URL(url);
+    const params = new URLSearchParams(urlObj.search);
+    
+    // Extract cookies and user agent from URL parameters
+    const cookie = params.get('Cookie');
+    const userAgent = params.get('User-Agent');
+    
+    // Remove these parameters from the URL before making the request
+    params.delete('Cookie');
+    params.delete('User-Agent');
+    urlObj.search = params.toString();
+    const cleanUrl = urlObj.toString();
+
     // Add necessary headers for the request
     const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'User-Agent': userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': '*/*',
       'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive',
@@ -24,18 +38,23 @@ router.get('/stream-proxy', async (req, res) => {
       'Sec-Fetch-Site': 'cross-site',
     };
 
+    // Add cookie if present
+    if (cookie) {
+      headers['Cookie'] = cookie;
+    }
+
     // Add referer if it's a segment request
     if (isSegment) {
       // Extract the base URL from the segment URL
-      const baseUrl = url.split('/').slice(0, 3).join('/');
+      const baseUrl = cleanUrl.split('/').slice(0, 3).join('/');
       headers['Referer'] = baseUrl;
     }
 
-    console.log('Proxying request to:', url);
+    console.log('Proxying request to:', cleanUrl);
 
     const response = await axios({
       method: 'get',
-      url: url,
+      url: cleanUrl,
       headers: headers,
       responseType: isSegment ? 'arraybuffer' : 'text',
       maxRedirects: 5,

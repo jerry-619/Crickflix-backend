@@ -18,24 +18,42 @@ router.get('/stream-proxy', async (req, res) => {
     const params = new URLSearchParams(urlObj.search);
     
     // Extract cookies and user agent from URL parameters
-    const cookie = params.get('Cookie');
-    const userAgent = params.get('User-Agent');
+    let cookie = params.get('Cookie');
+    const userAgent = params.get('User-Agent') || 'Hotstar;in.startv.hotstar/25.02.24.8.11169 (Android/15)';
+    
+    // Handle the special case where Cookie is after a pipe character
+    if (url.includes('|Cookie=')) {
+      const cookieMatch = url.match(/\|Cookie=([^&]+)/);
+      if (cookieMatch) {
+        cookie = decodeURIComponent(cookieMatch[1]);
+      }
+    }
     
     // Remove these parameters from the URL before making the request
     params.delete('Cookie');
     params.delete('User-Agent');
     urlObj.search = params.toString();
-    const cleanUrl = urlObj.toString();
+    
+    // Clean the URL by removing the pipe and everything after it
+    let cleanUrl = urlObj.toString();
+    if (cleanUrl.includes('|')) {
+      cleanUrl = cleanUrl.split('|')[0];
+    }
 
     // Add necessary headers for the request
     const headers = {
-      'User-Agent': userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'User-Agent': userAgent,
       'Accept': '*/*',
       'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive',
       'Sec-Fetch-Dest': 'empty',
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Site': 'cross-site',
+      'Origin': 'https://www.hotstar.com',
+      'Referer': 'https://www.hotstar.com/',
+      'x-country-code': 'IN',
+      'x-platform-code': 'ANDROID',
+      'x-client-code': 'hotstar-android',
     };
 
     // Add cookie if present
@@ -43,14 +61,14 @@ router.get('/stream-proxy', async (req, res) => {
       headers['Cookie'] = cookie;
     }
 
-    // Add referer if it's a segment request
+    // Add additional headers for segments
     if (isSegment) {
-      // Extract the base URL from the segment URL
       const baseUrl = cleanUrl.split('/').slice(0, 3).join('/');
       headers['Referer'] = baseUrl;
     }
 
     console.log('Proxying request to:', cleanUrl);
+    console.log('Headers:', headers);
 
     const response = await axios({
       method: 'get',
@@ -60,7 +78,7 @@ router.get('/stream-proxy', async (req, res) => {
       maxRedirects: 5,
       timeout: 30000,
       validateStatus: function (status) {
-        return status >= 200 && status < 300; // Accept only success status codes
+        return status >= 200 && status < 300;
       }
     });
 

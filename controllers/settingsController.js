@@ -1,7 +1,7 @@
 const Settings = require('../models/Settings');
 
 // Get settings
-exports.getSettings = async (req, res) => {
+const getSettings = async (req, res) => {
   try {
     let settings = await Settings.findOne();
     if (!settings) {
@@ -14,7 +14,7 @@ exports.getSettings = async (req, res) => {
 };
 
 // Update settings
-exports.updateSettings = async (req, res) => {
+const updateSettings = async (req, res) => {
   try {
     let settings = await Settings.findOne();
     if (!settings) {
@@ -36,7 +36,7 @@ exports.updateSettings = async (req, res) => {
 };
 
 // Get maintenance status (public route)
-exports.getMaintenanceStatus = async (req, res) => {
+const getMaintenanceStatus = async (req, res) => {
   try {
     const settings = await Settings.findOne();
     if (!settings) {
@@ -49,4 +49,10 @@ exports.getMaintenanceStatus = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+};
+
+module.exports = {
+  getSettings,
+  updateSettings,
+  getMaintenanceStatus
 }; 

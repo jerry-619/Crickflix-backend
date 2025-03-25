@@ -9,70 +9,43 @@ router.get('/stream-proxy', async (req, res) => {
       return res.status(400).json({ message: 'URL parameter is required' });
     }
 
+    // Prevent recursive proxy calls
+    if (url.includes('/stream-proxy')) {
+      const match = url.match(/url=([^&]+)/);
+      if (match) {
+        const actualUrl = decodeURIComponent(match[1]);
+        return res.redirect(307, `${req.baseUrl}/stream-proxy?url=${encodeURIComponent(actualUrl)}`);
+      }
+      return res.status(400).json({ message: 'Invalid proxy URL' });
+    }
+
     // Check if the URL is an m3u8 manifest, mpd manifest, or a segment
     const isManifest = url.endsWith('.m3u8') || url.endsWith('.mpd');
     const isSegment = url.includes('/hlsr/') || url.includes('.ts') || url.includes('.m4s');
 
-    // Parse URL parameters
-    const urlObj = new URL(url);
-    const params = new URLSearchParams(urlObj.search);
-    
-    // Extract cookies and user agent from URL parameters
-    let cookie = params.get('Cookie');
-    const userAgent = params.get('User-Agent') || 'Hotstar;in.startv.hotstar/25.02.24.8.11169 (Android/15)';
-    
-    // Handle the special case where Cookie is after a pipe character
-    if (url.includes('|Cookie=')) {
-      const cookieMatch = url.match(/\|Cookie=([^&]+)/);
-      if (cookieMatch) {
-        cookie = decodeURIComponent(cookieMatch[1]);
-      }
-    }
-    
-    // Remove these parameters from the URL before making the request
-    params.delete('Cookie');
-    params.delete('User-Agent');
-    urlObj.search = params.toString();
-    
-    // Clean the URL by removing the pipe and everything after it
-    let cleanUrl = urlObj.toString();
-    if (cleanUrl.includes('|')) {
-      cleanUrl = cleanUrl.split('|')[0];
-    }
-
     // Add necessary headers for the request
     const headers = {
-      'User-Agent': userAgent,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': '*/*',
       'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive',
       'Sec-Fetch-Dest': 'empty',
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Site': 'cross-site',
-      'Origin': 'https://www.hotstar.com',
-      'Referer': 'https://www.hotstar.com/',
-      'x-country-code': 'IN',
-      'x-platform-code': 'ANDROID',
-      'x-client-code': 'hotstar-android',
     };
 
-    // Add cookie if present
-    if (cookie) {
-      headers['Cookie'] = cookie;
-    }
-
-    // Add additional headers for segments
+    // Add referer if it's a segment request
     if (isSegment) {
-      const baseUrl = cleanUrl.split('/').slice(0, 3).join('/');
+      const baseUrl = url.split('/').slice(0, 3).join('/');
       headers['Referer'] = baseUrl;
     }
 
-    console.log('Proxying request to:', cleanUrl);
+    console.log('Proxying request to:', url);
     console.log('Headers:', headers);
 
     const response = await axios({
       method: 'get',
-      url: cleanUrl,
+      url: url,
       headers: headers,
       responseType: isSegment ? 'arraybuffer' : 'text',
       maxRedirects: 5,
@@ -106,8 +79,24 @@ router.get('/stream-proxy', async (req, res) => {
       return res.status(200).end();
     }
 
-    // Send the response
-    res.send(response.data);
+    // For m3u8 manifests, rewrite the URLs to use our proxy
+    if (isManifest && typeof response.data === 'string') {
+      const manifestLines = response.data.split('\n');
+      const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+      
+      const rewrittenManifest = manifestLines.map(line => {
+        if (line.startsWith('#')) return line;
+        if (!line.trim()) return line;
+        
+        // Handle both absolute and relative URLs
+        const segmentUrl = line.startsWith('http') ? line : new URL(line, baseUrl).toString();
+        return `${req.protocol}://${req.get('host')}${req.baseUrl}/stream-proxy?url=${encodeURIComponent(segmentUrl)}`;
+      }).join('\n');
+      
+      res.send(rewrittenManifest);
+    } else {
+      res.send(response.data);
+    }
 
   } catch (error) {
     console.error('Stream proxy error:', error.message);

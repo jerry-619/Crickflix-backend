@@ -14,13 +14,21 @@ router.get('/maintenance', protect, admin, async (req, res) => {
 });
 
 router.put('/maintenance', protect, admin, async (req, res) => {
-  const { maintenanceMode } = req.body;
-  const setting = await Setting.findOneAndUpdate(
-    { key: 'maintenanceMode' },
-    { value: maintenanceMode },
-    { new: true, upsert: true }
-  );
-  res.json({ maintenanceMode: setting.value });
+  try {
+    const { maintenanceMode } = req.body;
+    const setting = await Setting.findOneAndUpdate(
+      { key: 'maintenanceMode' },
+      { value: maintenanceMode },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, maintenanceMode: setting.value });
+  } catch (error) {
+    console.error('Maintenance mode error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to update maintenance mode'
+    });
+  }
 });
 
 module.exports = router; 

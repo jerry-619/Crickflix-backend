@@ -10,8 +10,12 @@ const {
 // Public routes
 router.get('/maintenance', getMaintenanceStatus);
 
-// Protected routes
-router.get('/', protect, admin, getSettings);
-router.put('/', protect, admin, updateSettings);
+// Protected admin routes
+router.use(protect);
+router.use(admin);
+
+router.route('/')
+  .get(getSettings)
+  .put(updateSettings);
 
 module.exports = router; 

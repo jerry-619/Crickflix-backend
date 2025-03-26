@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const streamProxy = require('../controllers/streamProxyController');
 
 router.get('/stream-proxy', async (req, res) => {
   try {
@@ -94,5 +95,8 @@ router.get('/stream-proxy', async (req, res) => {
     }
   }
 });
+
+// Proxy route for HLS streams
+router.use('/stream', streamProxy);
 
 module.exports = router; 

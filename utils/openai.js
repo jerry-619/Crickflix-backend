@@ -84,12 +84,30 @@ Important team changes to note:
 - Rishabh Pant returns as LSG captain
 `;
 
+// Add this helper function at the top with other helper functions
+function isIPLTeam(teamName) {
+  const iplTeams = {
+    // Abbreviations
+    'MI': true, 'CSK': true, 'RCB': true, 'KKR': true, 'SRH': true, 
+    'RR': true, 'PBKS': true, 'DC': true, 'GT': true, 'LSG': true,
+    // Full names
+    'MUMBAI INDIANS': true, 'CHENNAI SUPER KINGS': true, 
+    'ROYAL CHALLENGERS BENGALURU': true, 'KOLKATA KNIGHT RIDERS': true,
+    'SUNRISERS HYDERABAD': true, 'RAJASTHAN ROYALS': true,
+    'PUNJAB KINGS': true, 'DELHI CAPITALS': true,
+    'GUJARAT TITANS': true, 'LUCKNOW SUPER GIANTS': true
+  };
+  
+  return iplTeams[teamName.toUpperCase()] || false;
+}
+
 async function getFantasyXI(team1, team2) {
   try {
     console.log(`Generating fantasy XI for ${team1} vs ${team2}`);
     
-    // Determine if it's an IPL match
-    const isIPLMatch = team1.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/) && team2.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/);
+    // Updated IPL match detection
+    const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
+    console.log('Is IPL match:', isIPLMatch, { team1, team2 });
     
     const prompt = `You are simulating cricket match fantasy predictions. Create a realistic fantasy XI for a match between ${team1} vs ${team2}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
@@ -161,23 +179,41 @@ Return this exact JSON structure:
       }
     }`;
     
-    const result = await retryOperation(async () => {
+    let result;
+    try {
       console.log('Sending prompt to Gemini AI...');
       const response = await ai.models.generateContent({
         model: "gemini-1.5-flash",
         contents: prompt
       });
       console.log('Received response from Gemini AI');
-      return response.text;
-    });
+      result = response.text;
+    } catch (aiError) {
+      console.error('Error from Gemini AI:', aiError);
+      throw new Error('Failed to generate predictions. AI service error.');
+    }
+
+    if (!result) {
+      throw new Error('No response received from AI service.');
+    }
 
     console.log('Fantasy XI generated successfully');
-    const cleanedResponse = cleanJsonResponse(result);
-    return cleanedResponse;
+    try {
+      const cleanedResponse = cleanJsonResponse(result);
+      // Validate the cleaned response
+      const parsed = JSON.parse(cleanedResponse);
+      if (!parsed || !parsed.team1 || !parsed.team2 || !parsed.players) {
+        throw new Error('Invalid response format from AI service.');
+      }
+      return cleanedResponse;
+    } catch (parseError) {
+      console.error('Error parsing AI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error) {
     console.error('Error generating fantasy XI:', error);
     console.error('Error details:', error.message);
-    throw new Error('Failed to generate fantasy XI. Please try again later.');
+    throw new Error(error.message || 'Failed to generate fantasy XI. Please try again later.');
   }
 }
 
@@ -185,8 +221,9 @@ async function getMatchPrediction(team1, team2) {
   try {
     console.log(`Generating match prediction for ${team1} vs ${team2}`);
     
-    // Determine if it's an IPL match
-    const isIPLMatch = team1.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/) && team2.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/);
+    // Updated IPL match detection
+    const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
+    console.log('Is IPL match:', isIPLMatch, { team1, team2 });
     
     const prompt = `You are simulating cricket match predictions. Create a realistic prediction for a match between ${team1} vs ${team2}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
@@ -197,6 +234,11 @@ Return this exact JSON structure:
     {
       "team1": "${team1}",
       "team2": "${team2}",
+      "venue": {
+        "name": "Match Venue Name",
+        "city": "City Name",
+        "country": "Country Name"
+      },
       "team1Stats": {
         "recentForm": "Recent performance summary",
         "keyPlayers": ["Player 1", "Player 2", "Player 3"],
@@ -210,8 +252,11 @@ Return this exact JSON structure:
         "weaknesses": ["Weakness 1", "Weakness 2"]
       },
       "matchAnalysis": {
-        "venue": "Match Venue",
-        "conditions": "Weather and pitch conditions",
+        "conditions": {
+          "weather": "Weather conditions",
+          "pitch": "Pitch conditions",
+          "time": "Day/Night"
+        },
         "keyBattles": [
           {
             "player1": "Team 1 Player",
@@ -229,8 +274,7 @@ Return this exact JSON structure:
         "margin": "Predicted victory margin",
         "keyFactors": ["Factor 1", "Factor 2"],
         "confidence": "75%"
-      },
-      "lastUpdated": "${new Date().toISOString()}"
+      }
     }`;
 
     const result = await retryOperation(async () => {
@@ -257,8 +301,9 @@ async function getTossPrediction(team1, team2) {
   try {
     console.log(`Generating toss prediction for ${team1} vs ${team2}`);
     
-    // Determine if it's an IPL match
-    const isIPLMatch = team1.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/) && team2.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/);
+    // Updated IPL match detection
+    const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
+    console.log('Is IPL match:', isIPLMatch, { team1, team2 });
     
     const prompt = `You are simulating cricket match toss predictions. Create a realistic toss prediction for a match between ${team1} vs ${team2}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
@@ -269,7 +314,11 @@ Return this exact JSON structure:
     {
       "team1": "${team1}",
       "team2": "${team2}",
-      "venue": "Match Venue",
+      "venue": {
+        "name": "Match Venue Name",
+        "city": "City Name",
+        "country": "Country Name"
+      },
       "conditions": {
         "time": "Day/Night",
         "weather": "Weather conditions",
@@ -285,8 +334,7 @@ Return this exact JSON structure:
         "team1TossWinRate": "Recent toss win percentage",
         "team2TossWinRate": "Recent toss win percentage",
         "venueTossPattern": "Common toss decisions at this venue"
-      },
-      "lastUpdated": "${new Date().toISOString()}"
+      }
     }`;
 
     const result = await retryOperation(async () => {

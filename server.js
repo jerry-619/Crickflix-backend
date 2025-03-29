@@ -38,19 +38,35 @@ const io = new Server(httpServer, {
 
 // Enable CORS with proper configuration
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL,
-    process.env.ADMIN_URL,
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:3000',
-    'http://localhost:3001'
-  ],
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      process.env.ADMIN_URL,
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(null, true); // Temporarily allow all origins in production
+    }
+    
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
+
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
 
 // Body parser middleware
 app.use(express.json({ limit: '50mb' }));

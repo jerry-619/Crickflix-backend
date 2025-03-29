@@ -23,7 +23,9 @@ applications:
             - npm run build
         postBuild:
           commands:
-            - npm start &
+            - export PORT=8080
+            - npm start > server.log 2>&1 &
+            - sleep 5
       artifacts:
         baseDirectory: .
         files:

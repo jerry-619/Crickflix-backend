@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node server.js",
     "start": "node --watch server.js",
-    "build": "node --watch server.js"
+    "build": "node server.js"
   },
   "keywords": [
     "cricket",

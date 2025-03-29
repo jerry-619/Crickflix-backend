@@ -1,0 +1,30 @@
+version: 1
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - echo "No frontend build required"
+        build:
+          commands:
+            - echo "No frontend build required"
+      artifacts:
+        baseDirectory: /
+        files:
+          - '**/*'
+    appRoot: .
+    backend:
+      phases:
+        preBuild:
+          commands:
+            - npm install
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/* 

@@ -92,12 +92,22 @@ const createMatch = asyncHandler(async (req, res) => {
     throw new Error('Invalid category');
   }
 
-  // Validate streaming sources
-  if (streamingSources) {
-    for (const source of streamingSources) {
+  // Parse streamingSources if it's a string
+  let parsedStreamingSources = streamingSources;
+  if (typeof streamingSources === 'string') {
+    try {
+      parsedStreamingSources = JSON.parse(streamingSources);
+    } catch (error) {
+      parsedStreamingSources = [];
+    }
+  }
+
+  // Validate streaming sources only for live matches
+  if (status === 'live' && parsedStreamingSources) {
+    for (const source of parsedStreamingSources) {
       if (!source.name || !source.url) {
         res.status(400);
-        throw new Error('Streaming sources must have name and url');
+        throw new Error('Streaming sources must have name and url for live matches');
       }
     }
   }
@@ -121,17 +131,15 @@ const createMatch = asyncHandler(async (req, res) => {
     description,
     thumbnail: thumbnailData?.url,
     thumbnailPublicId: thumbnailData?.public_id,
-    streamingUrl,
-    iframeUrl,
+    streamingUrl: streamingUrl || '',
+    iframeUrl: iframeUrl || '',
     streamType,
-    streamingSources,
+    streamingSources: parsedStreamingSources || [],
     category,
     isLive,
     status,
     scheduledTime: utcScheduledTime
   });
-
-  // Teams will be automatically extracted in the pre-save middleware
 
   // Emit socket event for new match if Socket.IO is available
   if (req.io) {
@@ -195,25 +203,15 @@ const updateMatch = asyncHandler(async (req, res) => {
   }
 
   // Determine streaming sources based on match status
-  let updatedStreamingSources;
-  if (status === 'completed') {
-    // For completed matches, keep existing sources
-    updatedStreamingSources = match.streamingSources;
-  } else if (status === 'upcoming') {
-    // For upcoming matches, allow empty sources
-    updatedStreamingSources = parsedStreamingSources || [];
-  } else {
-    // For live matches, validate sources
-    if (parsedStreamingSources && parsedStreamingSources.length > 0) {
-      for (const source of parsedStreamingSources) {
-        if (!source.name || !source.url) {
-          res.status(400);
-          throw new Error('Streaming sources must have name and url for live matches');
-        }
+  let updatedStreamingSources = parsedStreamingSources || [];
+  
+  // Only validate streaming sources for live matches
+  if (status === 'live' && updatedStreamingSources.length > 0) {
+    for (const source of updatedStreamingSources) {
+      if (!source.name || !source.url) {
+        res.status(400);
+        throw new Error('Streaming sources must have name and url for live matches');
       }
-      updatedStreamingSources = parsedStreamingSources;
-    } else {
-      updatedStreamingSources = [];
     }
   }
 
@@ -234,7 +232,7 @@ const updateMatch = asyncHandler(async (req, res) => {
       isLive,
       status,
       ...(status === 'upcoming' && scheduledTime && {
-        scheduledTime: new Date(scheduledTime)
+        scheduledTime: moment.tz(scheduledTime, 'Asia/Kolkata').utc().toDate()
       })
     },
     { new: true }

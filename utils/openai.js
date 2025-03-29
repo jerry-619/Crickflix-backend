@@ -87,9 +87,13 @@ Important team changes to note:
 async function getFantasyXI(team1, team2) {
   try {
     console.log(`Generating fantasy XI for ${team1} vs ${team2}`);
-    const prompt = `You are simulating IPL 2025 fantasy predictions. Create a realistic fantasy XI for a match between ${team1} and ${team2}. 
-${IPL_2025_CONTEXT}
-Use your knowledge of cricket to create plausible current form and statistics that would make sense for IPL 2025.
+    
+    // Determine if it's an IPL match
+    const isIPLMatch = team1.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/) && team2.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/);
+    
+    const prompt = `You are simulating cricket match fantasy predictions. Create a realistic fantasy XI for a match between ${team1} vs ${team2}.
+${isIPLMatch ? IPL_2025_CONTEXT : ''}
+Use your knowledge of cricket and current player statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
 
 Return this exact JSON structure:
@@ -104,8 +108,8 @@ Return this exact JSON structure:
           "isCaptain": false,
           "isViceCaptain": false,
           "recentForm": "Brief note on performance in last 3 matches",
-          "matchesPlayed2025": "5",
-          "currentStats2025": {
+          "matchesPlayed": "5",
+          "currentStats": {
             "runs": "125",
             "wickets": "3",
             "average": "31.25",
@@ -119,7 +123,7 @@ Return this exact JSON structure:
         "team": "Team Name",
         "role": "Player Role",
         "reason": "Detailed reason for captain selection",
-        "currentForm2025": "Recent performance stats",
+        "currentForm": "Recent performance stats",
         "expectedPoints": "Projected fantasy points"
       },
       "viceCaptain": {
@@ -127,7 +131,7 @@ Return this exact JSON structure:
         "team": "Team Name",
         "role": "Player Role",
         "reason": "Detailed reason for vice-captain selection",
-        "currentForm2025": "Recent performance stats",
+        "currentForm": "Recent performance stats",
         "expectedPoints": "Projected fantasy points"
       },
       "teamComposition": {
@@ -137,11 +141,11 @@ Return this exact JSON structure:
         "wicketKeeper": "1"
       },
       "matchInfo": {
-        "tournament": "IPL 2025",
+        "tournament": "${isIPLMatch ? 'IPL 2025' : 'Cricket Match'}",
         "venue": "Match Venue",
         "pitchReport": "Brief pitch and weather conditions",
-        "date": "2025-03-29",
-        "lastUpdated": "2025-03-29T${new Date().getHours()}:${new Date().getMinutes()}:${new Date().getSeconds()}Z"
+        "date": "${new Date().toISOString().split('T')[0]}",
+        "lastUpdated": "${new Date().toISOString()}"
       },
       "teamSummary": {
         "totalProjectedPoints": "Expected total fantasy points",
@@ -164,8 +168,6 @@ Return this exact JSON structure:
         contents: prompt
       });
       console.log('Received response from Gemini AI');
-      console.log('Response object:', response);
-      console.log('Response text:', response.text);
       return response.text;
     });
 
@@ -182,48 +184,62 @@ Return this exact JSON structure:
 async function getMatchPrediction(team1, team2) {
   try {
     console.log(`Generating match prediction for ${team1} vs ${team2}`);
-    const prompt = `You are simulating IPL 2025 match predictions. Create a realistic prediction for a match between ${team1} and ${team2}.
-${IPL_2025_CONTEXT}
-Use your knowledge of cricket to create plausible statistics and analysis that would make sense for IPL 2025.
+    
+    // Determine if it's an IPL match
+    const isIPLMatch = team1.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/) && team2.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/);
+    
+    const prompt = `You are simulating cricket match predictions. Create a realistic prediction for a match between ${team1} vs ${team2}.
+${isIPLMatch ? IPL_2025_CONTEXT : ''}
+Use your knowledge of cricket and current player statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
 
 Return this exact JSON structure:
     {
       "team1": "${team1}",
       "team2": "${team2}",
-      "team1Stats2025": {
-        "matchesPlayed": "5",
-        "matchesWon": "3",
-        "currentPosition": "4",
-        "recentForm": "W W L W L"
+      "team1Stats": {
+        "recentForm": "Recent performance summary",
+        "keyPlayers": ["Player 1", "Player 2", "Player 3"],
+        "strengths": ["Strength 1", "Strength 2"],
+        "weaknesses": ["Weakness 1", "Weakness 2"]
       },
-      "team2Stats2025": {
-        "matchesPlayed": "5",
-        "matchesWon": "4",
-        "currentPosition": "2",
-        "recentForm": "W W W L W"
+      "team2Stats": {
+        "recentForm": "Recent performance summary",
+        "keyPlayers": ["Player 1", "Player 2", "Player 3"],
+        "strengths": ["Strength 1", "Strength 2"],
+        "weaknesses": ["Weakness 1", "Weakness 2"]
       },
-      "team1Probability": "45%",
-      "team2Probability": "55%",
-      "analysis": "Detailed match analysis and prediction",
-      "keyFactors": {
-        "currentForm": "Team form analysis",
-        "injuries": "Key player availability",
-        "venue": "Venue impact analysis"
-      },
-      "matchInfo": {
-        "tournament": "IPL 2025",
+      "matchAnalysis": {
         "venue": "Match Venue",
-        "date": "today date in dd/mm/yyyy format",
-        "lastUpdated": "2025-03-29T${new Date().getHours()}:${new Date().getMinutes()}:${new Date().getSeconds()}Z"
-      }
+        "conditions": "Weather and pitch conditions",
+        "keyBattles": [
+          {
+            "player1": "Team 1 Player",
+            "player2": "Team 2 Player",
+            "analysis": "Analysis of this matchup"
+          }
+        ],
+        "winningProbability": {
+          "team1": "55%",
+          "team2": "45%"
+        }
+      },
+      "prediction": {
+        "winner": "Predicted winning team",
+        "margin": "Predicted victory margin",
+        "keyFactors": ["Factor 1", "Factor 2"],
+        "confidence": "75%"
+      },
+      "lastUpdated": "${new Date().toISOString()}"
     }`;
-    
+
     const result = await retryOperation(async () => {
+      console.log('Sending prompt to Gemini AI...');
       const response = await ai.models.generateContent({
         model: "gemini-1.5-flash",
         contents: prompt
       });
+      console.log('Received response from Gemini AI');
       return response.text;
     });
 
@@ -232,6 +248,7 @@ Return this exact JSON structure:
     return cleanedResponse;
   } catch (error) {
     console.error('Error generating match prediction:', error);
+    console.error('Error details:', error.message);
     throw new Error('Failed to generate match prediction. Please try again later.');
   }
 }
@@ -239,48 +256,46 @@ Return this exact JSON structure:
 async function getTossPrediction(team1, team2) {
   try {
     console.log(`Generating toss prediction for ${team1} vs ${team2}`);
-    const prompt = `You are simulating IPL 2025 toss predictions. Create a realistic toss prediction for a match between ${team1} and ${team2}.
-${IPL_2025_CONTEXT}
-Use your knowledge of cricket to create plausible statistics and analysis that would make sense for IPL 2025.
+    
+    // Determine if it's an IPL match
+    const isIPLMatch = team1.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/) && team2.match(/^(MI|CSK|RCB|KKR|SRH|RR|PBKS|DC|GT|LSG)$/);
+    
+    const prompt = `You are simulating cricket match toss predictions. Create a realistic toss prediction for a match between ${team1} vs ${team2}.
+${isIPLMatch ? IPL_2025_CONTEXT : ''}
+Use your knowledge of cricket and current statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
 
 Return this exact JSON structure:
     {
-      "winner": "Predicted team to win toss",
-      "decision": "Predicted decision (bat/field)",
-      "tossStats2025": {
-        "team1": {
-          "tossesWon": "3",
-          "battingFirst": "2",
-          "fieldingFirst": "1",
-          "tossWinRate": "60%"
-        },
-        "team2": {
-          "tossesWon": "2",
-          "battingFirst": "1",
-          "fieldingFirst": "1",
-          "tossWinRate": "40%"
-        }
+      "team1": "${team1}",
+      "team2": "${team2}",
+      "venue": "Match Venue",
+      "conditions": {
+        "time": "Day/Night",
+        "weather": "Weather conditions",
+        "pitch": "Pitch conditions"
       },
-      "venueStats2025": {
-        "totalMatches": "4",
-        "battingFirstWins": "3",
-        "fieldingFirstWins": "1"
+      "tossPrediction": {
+        "winner": "Team predicted to win toss",
+        "choice": "Bat/Bowl",
+        "confidence": "65%",
+        "reasoning": ["Reason 1", "Reason 2"]
       },
-      "reasoning": "Detailed toss prediction analysis",
-      "matchInfo": {
-        "tournament": "IPL 2025",
-        "venue": "Match Venue",
-        "date": "today date in dd/mm/yyyy format",
-        "lastUpdated": "2025-03-29T${new Date().getHours()}:${new Date().getMinutes()}:${new Date().getSeconds()}Z"
-      }
+      "historicalData": {
+        "team1TossWinRate": "Recent toss win percentage",
+        "team2TossWinRate": "Recent toss win percentage",
+        "venueTossPattern": "Common toss decisions at this venue"
+      },
+      "lastUpdated": "${new Date().toISOString()}"
     }`;
-    
+
     const result = await retryOperation(async () => {
+      console.log('Sending prompt to Gemini AI...');
       const response = await ai.models.generateContent({
         model: "gemini-1.5-flash",
         contents: prompt
       });
+      console.log('Received response from Gemini AI');
       return response.text;
     });
 
@@ -289,6 +304,7 @@ Return this exact JSON structure:
     return cleanedResponse;
   } catch (error) {
     console.error('Error generating toss prediction:', error);
+    console.error('Error details:', error.message);
     throw new Error('Failed to generate toss prediction. Please try again later.');
   }
 }

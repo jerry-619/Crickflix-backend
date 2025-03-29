@@ -5,6 +5,7 @@ const uploadToCloudinary = require('../utils/uploadToCloudinary');
 const fs = require('fs').promises;
 const path = require('path');
 const asyncHandler = require('express-async-handler');
+const moment = require('moment-timezone');
 
 // Helper function to delete file from Cloudinary
 const deleteFromCloudinary = async (publicId) => {
@@ -112,6 +113,9 @@ const createMatch = asyncHandler(async (req, res) => {
     thumbnailData = await uploadToCloudinary(req.file.path);
   }
 
+  // Convert scheduled time to UTC before saving
+  const utcScheduledTime = status === 'upcoming' ? moment.tz(scheduledTime, 'Asia/Kolkata').utc().toDate() : undefined;
+
   const match = await Match.create({
     title,
     description,
@@ -124,13 +128,15 @@ const createMatch = asyncHandler(async (req, res) => {
     category,
     isLive,
     status,
-    scheduledTime: status === 'upcoming' ? new Date(scheduledTime) : undefined
+    scheduledTime: utcScheduledTime
   });
 
   // Teams will be automatically extracted in the pre-save middleware
 
-  // Emit socket event for new match
-  req.io.emit('matchCreated', match);
+  // Emit socket event for new match if Socket.IO is available
+  if (req.io) {
+    req.io.emit('matchCreated', match);
+  }
 
   res.status(201).json(match);
 });
@@ -159,22 +165,22 @@ const updateMatch = asyncHandler(async (req, res) => {
     scheduledTime
   } = req.body;
 
+  // Parse streamingSources if it's a string
+  let parsedStreamingSources = streamingSources;
+  if (typeof streamingSources === 'string') {
+    try {
+      parsedStreamingSources = JSON.parse(streamingSources);
+    } catch (error) {
+      parsedStreamingSources = [];
+    }
+  }
+
   // Validate category if provided
   if (category) {
     const categoryExists = await Category.findById(category);
     if (!categoryExists) {
       res.status(400);
       throw new Error('Invalid category');
-    }
-  }
-
-  // Validate streaming sources if provided and not completing match
-  if (streamingSources && status !== 'completed') {
-    for (const source of streamingSources) {
-      if (!source.name || !source.url) {
-        res.status(400);
-        throw new Error('Streaming sources must have name and url');
-      }
     }
   }
 
@@ -188,8 +194,28 @@ const updateMatch = asyncHandler(async (req, res) => {
     thumbnailData = await uploadToCloudinary(req.file.path);
   }
 
-  // If match is being completed, keep existing streaming sources
-  const updatedStreamingSources = status === 'completed' ? match.streamingSources : streamingSources;
+  // Determine streaming sources based on match status
+  let updatedStreamingSources;
+  if (status === 'completed') {
+    // For completed matches, keep existing sources
+    updatedStreamingSources = match.streamingSources;
+  } else if (status === 'upcoming') {
+    // For upcoming matches, allow empty sources
+    updatedStreamingSources = parsedStreamingSources || [];
+  } else {
+    // For live matches, validate sources
+    if (parsedStreamingSources && parsedStreamingSources.length > 0) {
+      for (const source of parsedStreamingSources) {
+        if (!source.name || !source.url) {
+          res.status(400);
+          throw new Error('Streaming sources must have name and url for live matches');
+        }
+      }
+      updatedStreamingSources = parsedStreamingSources;
+    } else {
+      updatedStreamingSources = [];
+    }
+  }
 
   const updatedMatch = await Match.findByIdAndUpdate(
     req.params.id,
@@ -200,8 +226,8 @@ const updateMatch = asyncHandler(async (req, res) => {
         thumbnail: thumbnailData.url,
         thumbnailPublicId: thumbnailData.public_id
       }),
-      streamingUrl,
-      iframeUrl,
+      streamingUrl: streamingUrl || '',
+      iframeUrl: iframeUrl || '',
       streamType,
       streamingSources: updatedStreamingSources,
       category,
@@ -214,10 +240,10 @@ const updateMatch = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  // Teams will be automatically extracted in the pre-update middleware
-
-  // Emit socket event for updated match
-  req.io.emit('matchUpdated', updatedMatch);
+  // Emit socket event for updated match if Socket.IO is available
+  if (req.io) {
+    req.io.emit('matchUpdated', updatedMatch);
+  }
 
   res.json(updatedMatch);
 });
@@ -240,8 +266,10 @@ const deleteMatch = asyncHandler(async (req, res) => {
 
   await match.deleteOne();
 
-  // Emit socket event for deleted match
-  req.io.emit('matchDeleted', req.params.id);
+  // Emit socket event for deleted match if Socket.IO is available
+  if (req.io) {
+    req.io.emit('matchDeleted', req.params.id);
+  }
 
   res.json({ message: 'Match removed' });
 });

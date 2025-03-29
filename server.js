@@ -87,6 +87,12 @@ const upload = multer({
 // Static folder
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Attach io to req object
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // Route files
 const authRoutes = require('./routes/authRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');

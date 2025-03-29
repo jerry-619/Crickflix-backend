@@ -94,6 +94,7 @@ const matchRoutes = require('./routes/matchRoutes');
 const streamRoutes = require('./routes/streamRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const blogRoutes = require('./routes/blogRoutes');
+const predictionRoutes = require('./routes/predictionRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -102,6 +103,7 @@ app.use('/api/matches', matchRoutes);
 app.use('/api', streamRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/blogs', blogRoutes);
+app.use('/api/predictions', predictionRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

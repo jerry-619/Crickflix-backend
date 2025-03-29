@@ -20,266 +20,227 @@ const deleteFromCloudinary = async (publicId) => {
 // @desc    Get all matches
 // @route   GET /api/matches
 // @access  Public
-const getMatches = async (req, res) => {
-  try {
-    const query = {};
-    
-    // Filter by category if provided
-    if (req.query.category) {
-      const category = await Category.findOne({ slug: req.query.category });
-      if (category) {
-        query.category = category._id;
-      }
-    }
-
-    const matches = await Match.find(query)
-      .sort({ createdAt: -1 })
-      .populate('category');
-    
-    res.json(matches);
-  } catch (error) {
-    console.error('Error fetching matches:', error);
-    res.status(500).json({ message: 'Server error' });
+const getMatches = asyncHandler(async (req, res) => {
+  const { category, status } = req.query;
+  const filter = {};
+  
+  if (category) {
+    filter.category = category;
   }
-};
+  
+  if (status) {
+    filter.status = status;
+  }
+  
+  const matches = await Match.find(filter)
+    .populate('category', 'name')
+    .sort({ createdAt: -1 });
+
+  // Extract teams for any matches that need it
+  for (const match of matches) {
+    if (!match.team1 || !match.team2 || match.team1 === '' || match.team2 === '') {
+      match.markModified('title');
+      await match.save();
+    }
+  }
+  
+  res.json(matches);
+});
 
 // @desc    Get single match
 // @route   GET /api/matches/:id
 // @access  Public
-const getMatch = async (req, res) => {
-  try {
-    const match = await Match.findById(req.params.id)
-      .populate('category', 'name slug');
-
-    if (!match) {
-      return res.status(404).json({ message: 'Match not found' });
-    }
-
-    res.json(match);
-  } catch (error) {
-    console.error('Error fetching match:', error);
-    res.status(500).json({ message: 'Server error' });
+const getMatch = asyncHandler(async (req, res) => {
+  const match = await Match.findById(req.params.id).populate('category', 'name');
+  
+  if (!match) {
+    res.status(404);
+    throw new Error('Match not found');
   }
-};
+
+  // Extract teams if needed
+  if (!match.team1 || !match.team2 || match.team1 === '' || match.team2 === '') {
+    match.markModified('title');
+    await match.save();
+  }
+
+  res.json(match);
+});
 
 // @desc    Create new match
 // @route   POST /api/matches
 // @access  Private/Admin
 const createMatch = asyncHandler(async (req, res) => {
-  try {
-    // Verify category exists
-    const category = await Category.findById(req.body.category);
-    if (!category) {
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-      }
-      return res.status(400).json({ message: 'Invalid category' });
-    }
+  const {
+    title,
+    description,
+    streamingUrl,
+    iframeUrl,
+    streamType,
+    streamingSources,
+    category,
+    isLive,
+    status,
+    scheduledTime
+  } = req.body;
 
-    // Parse streaming sources from the request body
-    let streamingSources = [];
-    try {
-      streamingSources = JSON.parse(req.body.streamingSources || '[]');
-    } catch (error) {
-      console.error('Error parsing streaming sources');
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-      }
-      return res.status(400).json({ message: 'Invalid streaming sources format' });
-    }
-
-    // Validate streaming sources for live matches
-    if (req.body.status === 'live') {
-      // Check if either old or new streaming method is provided
-      const hasOldStreaming = req.body.streamingUrl || req.body.iframeUrl;
-      const hasNewStreaming = streamingSources && streamingSources.length > 0;
-
-      if (!hasOldStreaming && !hasNewStreaming) {
-        if (req.files) {
-          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-        }
-        return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
-      }
-    }
-
-    // Validate scheduledTime for upcoming matches
-    if (req.body.status === 'upcoming' && !req.body.scheduledTime) {
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-      }
-      return res.status(400).json({ message: 'Scheduled time is required for upcoming matches' });
-    }
-
-    const matchData = {
-      ...req.body,
-      streamingSources
-    };
-    
-    // Convert scheduledTime string to Date object
-    if (matchData.scheduledTime) {
-      matchData.scheduledTime = new Date(matchData.scheduledTime);
-    }
-    
-    // Handle file uploads
-    if (req.files && req.files.thumbnail) {
-      const uploadResult = await uploadToCloudinary(req.files.thumbnail[0]);
-      matchData.thumbnail = uploadResult.url;
-      matchData.thumbnailPublicId = uploadResult.public_id;
-    }
-
-    // Create match
-    const match = await Match.create(matchData);
-    const populatedMatch = await Match.findById(match._id).populate('category', 'name slug');
-    
-    // Emit socket event for new match
-    req.app.get('io').emit('matchCreated', populatedMatch);
-    
-    res.status(201).json(populatedMatch);
-  } catch (error) {
-    console.error('Error creating match');
-    // Delete uploaded files if match creation fails
-    if (req.files) {
-      await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-    }
-    res.status(500).json({ message: error.message || 'Server error' });
+  // Validate category exists
+  const categoryExists = await Category.findById(category);
+  if (!category || !categoryExists) {
+    res.status(400);
+    throw new Error('Invalid category');
   }
+
+  // Validate streaming sources
+  if (streamingSources) {
+    for (const source of streamingSources) {
+      if (!source.name || !source.url) {
+        res.status(400);
+        throw new Error('Streaming sources must have name and url');
+      }
+    }
+  }
+
+  // Validate scheduled time for upcoming matches
+  if (status === 'upcoming' && !scheduledTime) {
+    res.status(400);
+    throw new Error('Scheduled time is required for upcoming matches');
+  }
+
+  let thumbnailData = null;
+  if (req.file) {
+    thumbnailData = await uploadToCloudinary(req.file.path);
+  }
+
+  const match = await Match.create({
+    title,
+    description,
+    thumbnail: thumbnailData?.url,
+    thumbnailPublicId: thumbnailData?.public_id,
+    streamingUrl,
+    iframeUrl,
+    streamType,
+    streamingSources,
+    category,
+    isLive,
+    status,
+    scheduledTime: status === 'upcoming' ? new Date(scheduledTime) : undefined
+  });
+
+  // Teams will be automatically extracted in the pre-save middleware
+
+  // Emit socket event for new match
+  req.io.emit('matchCreated', match);
+
+  res.status(201).json(match);
 });
 
 // @desc    Update match
 // @route   PUT /api/matches/:id
 // @access  Private/Admin
 const updateMatch = asyncHandler(async (req, res) => {
-  try {
-    const match = await Match.findById(req.params.id);
+  const match = await Match.findById(req.params.id);
 
-    if (!match) {
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-      }
-      return res.status(404).json({ message: 'Match not found' });
-    }
-
-    // Verify category exists if being updated
-    if (req.body.category) {
-      const category = await Category.findById(req.body.category);
-      if (!category) {
-        if (req.files) {
-          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-        }
-        return res.status(400).json({ message: 'Invalid category' });
-      }
-    }
-
-    // Parse streaming sources from the request body
-    let streamingSources = match.streamingSources;
-    if (req.body.streamingSources) {
-      try {
-        streamingSources = JSON.parse(req.body.streamingSources);
-      } catch (error) {
-        console.error('Error parsing streaming sources');
-        if (req.files) {
-          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-        }
-        return res.status(400).json({ message: 'Invalid streaming sources format' });
-      }
-    }
-
-    // Validate streaming sources for live matches
-    if (req.body.status === 'live') {
-      // Check if either old or new streaming method is provided
-      const hasOldStreaming = req.body.streamingUrl || req.body.iframeUrl || match.streamingUrl || match.iframeUrl;
-      const hasNewStreaming = streamingSources && streamingSources.length > 0;
-
-      if (!hasOldStreaming && !hasNewStreaming) {
-        if (req.files) {
-          await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-        }
-        return res.status(400).json({ message: 'At least one streaming source is required for live matches' });
-      }
-    }
-
-    // Validate scheduledTime for upcoming matches
-    if (req.body.status === 'upcoming' && !req.body.scheduledTime) {
-      if (req.files) {
-        await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-      }
-      return res.status(400).json({ message: 'Scheduled time is required for upcoming matches' });
-    }
-
-    const matchData = {
-      ...req.body,
-      streamingSources
-    };
-
-    // Convert scheduledTime string to Date object
-    if (matchData.scheduledTime) {
-      matchData.scheduledTime = new Date(matchData.scheduledTime);
-    }
-
-    // Handle file uploads
-    if (req.files && req.files.thumbnail) {
-      // Delete old thumbnail from Cloudinary if it exists
-      if (match.thumbnailPublicId) {
-        await deleteFromCloudinary(match.thumbnailPublicId);
-      }
-      
-      // Upload new thumbnail to Cloudinary
-      const uploadResult = await uploadToCloudinary(req.files.thumbnail[0]);
-      matchData.thumbnail = uploadResult.url;
-      matchData.thumbnailPublicId = uploadResult.public_id;
-    }
-
-    const updatedMatch = await Match.findByIdAndUpdate(
-      req.params.id,
-      matchData,
-      { new: true, runValidators: true }
-    ).populate('category', 'name slug');
-
-    if (!updatedMatch) {
-      res.status(404);
-      throw new Error('Match not found');
-    }
-
-    // Emit socket event for match update
-    req.app.get('io').emit('matchUpdated', updatedMatch);
-
-    res.json(updatedMatch);
-  } catch (error) {
-    console.error('Error updating match');
-    // Delete uploaded files if update fails
-    if (req.files) {
-      await Promise.all(Object.values(req.files).flat().map(f => fs.unlink(f.path)));
-    }
-    res.status(500).json({ message: error.message || 'Server error' });
+  if (!match) {
+    res.status(404);
+    throw new Error('Match not found');
   }
+
+  const {
+    title,
+    description,
+    streamingUrl,
+    iframeUrl,
+    streamType,
+    streamingSources,
+    category,
+    isLive,
+    status,
+    scheduledTime
+  } = req.body;
+
+  // Validate category if provided
+  if (category) {
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) {
+      res.status(400);
+      throw new Error('Invalid category');
+    }
+  }
+
+  // Validate streaming sources if provided
+  if (streamingSources) {
+    for (const source of streamingSources) {
+      if (!source.name || !source.url) {
+        res.status(400);
+        throw new Error('Streaming sources must have name and url');
+      }
+    }
+  }
+
+  // Handle thumbnail upload if provided
+  let thumbnailData = null;
+  if (req.file) {
+    // Delete old thumbnail if exists
+    if (match.thumbnailPublicId) {
+      await deleteFromCloudinary(match.thumbnailPublicId);
+    }
+    thumbnailData = await uploadToCloudinary(req.file.path);
+  }
+
+  const updatedMatch = await Match.findByIdAndUpdate(
+    req.params.id,
+    {
+      title,
+      description,
+      ...(thumbnailData && {
+        thumbnail: thumbnailData.url,
+        thumbnailPublicId: thumbnailData.public_id
+      }),
+      streamingUrl,
+      iframeUrl,
+      streamType,
+      streamingSources,
+      category,
+      isLive,
+      status,
+      ...(status === 'upcoming' && scheduledTime && {
+        scheduledTime: new Date(scheduledTime)
+      })
+    },
+    { new: true }
+  );
+
+  // Teams will be automatically extracted in the pre-update middleware
+
+  // Emit socket event for updated match
+  req.io.emit('matchUpdated', updatedMatch);
+
+  res.json(updatedMatch);
 });
 
 // @desc    Delete match
 // @route   DELETE /api/matches/:id
 // @access  Private/Admin
 const deleteMatch = asyncHandler(async (req, res) => {
-  try {
-    const match = await Match.findById(req.params.id);
-    if (!match) {
-      res.status(404);
-      throw new Error('Match not found');
-    }
+  const match = await Match.findById(req.params.id);
 
-    // Delete thumbnail from Cloudinary if exists
-    if (match.thumbnailPublicId) {
-      await deleteFromCloudinary(match.thumbnailPublicId);
-    }
-
-    await match.deleteOne();
-    
-    // Emit socket event for match deletion
-    req.app.get('io').emit('matchDeleted', req.params.id);
-
-    res.json({ message: 'Match removed', id: req.params.id });
-  } catch (error) {
-    console.error('Error deleting match');
-    res.status(500).json({ message: error.message || 'Server error' });
+  if (!match) {
+    res.status(404);
+    throw new Error('Match not found');
   }
+
+  // Delete thumbnail from cloudinary if exists
+  if (match.thumbnailPublicId) {
+    await deleteFromCloudinary(match.thumbnailPublicId);
+  }
+
+  await match.deleteOne();
+
+  // Emit socket event for deleted match
+  req.io.emit('matchDeleted', req.params.id);
+
+  res.json({ message: 'Match removed' });
 });
 
 // @desc    Toggle match live status
@@ -303,25 +264,22 @@ const toggleLiveStatus = async (req, res) => {
 };
 
 // @desc    Increment match views
-// @route   PUT /api/matches/:id/increment-views
+// @route   POST /api/matches/:id/view
 // @access  Public
-const incrementViews = async (req, res) => {
-  try {
-    const match = await Match.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { views: 1 } },
-      { new: true }
-    );
+const incrementViews = asyncHandler(async (req, res) => {
+  const match = await Match.findByIdAndUpdate(
+    req.params.id,
+    { $inc: { views: 1 } },
+    { new: true }
+  );
 
-    if (!match) {
-      return res.status(404).json({ message: 'Match not found' });
-    }
-
-    res.json({ views: match.views });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+  if (!match) {
+    res.status(404);
+    throw new Error('Match not found');
   }
-};
+
+  res.json({ views: match.views });
+});
 
 module.exports = {
   getMatches,

@@ -1,16 +1,18 @@
 version: 1
 applications:
-  - backend:
+  - appRoot: .
+    backend:
       phases:
         preBuild:
           commands:
             - npm install
         build:
           commands:
-            - npm start 
+            - npm run build
       artifacts:
+        baseDirectory: .
         files:
-          - '**/*' 
+          - '**/*'
       cache:
         paths:
           - node_modules/**/*

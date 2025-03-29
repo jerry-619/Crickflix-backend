@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "test": "node server.js",
-    "start": "node --watch server.js"
+    "start": "node --watch server.js",
+    "build": "node --watch server.js"
   },
   "keywords": [
     "cricket",

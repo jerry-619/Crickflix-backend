@@ -168,8 +168,8 @@ const updateMatch = asyncHandler(async (req, res) => {
     }
   }
 
-  // Validate streaming sources if provided
-  if (streamingSources) {
+  // Validate streaming sources if provided and not completing match
+  if (streamingSources && status !== 'completed') {
     for (const source of streamingSources) {
       if (!source.name || !source.url) {
         res.status(400);
@@ -188,6 +188,9 @@ const updateMatch = asyncHandler(async (req, res) => {
     thumbnailData = await uploadToCloudinary(req.file.path);
   }
 
+  // If match is being completed, keep existing streaming sources
+  const updatedStreamingSources = status === 'completed' ? match.streamingSources : streamingSources;
+
   const updatedMatch = await Match.findByIdAndUpdate(
     req.params.id,
     {
@@ -200,7 +203,7 @@ const updateMatch = asyncHandler(async (req, res) => {
       streamingUrl,
       iframeUrl,
       streamType,
-      streamingSources,
+      streamingSources: updatedStreamingSources,
       category,
       isLive,
       status,

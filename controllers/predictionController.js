@@ -104,6 +104,12 @@ const getMatchWinPrediction = asyncHandler(async (req, res) => {
     
     try {
       const parsedResponse = safeJsonParse(prediction);
+      console.log('Parsed prediction response:', parsedResponse);
+      
+      // Basic validation of the response structure
+      if (!parsedResponse || !parsedResponse.matchAnalysis) {
+        throw new Error('Invalid prediction format: Missing required fields');
+      }
       
       // Save the prediction to the match
       match.matchPrediction = parsedResponse;

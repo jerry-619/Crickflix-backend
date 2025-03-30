@@ -33,6 +33,129 @@ const teamSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+// New schemas for predictions
+const matchPredictionSchema = new mongoose.Schema({
+  winningProbability: {
+    team1: String,
+    team2: String
+  },
+  prediction: {
+    winner: String,
+    margin: String,
+    confidence: String
+  },
+  conditions: {
+    weather: String,
+    pitch: String,
+    time: String
+  },
+  team1Stats: {
+    recentForm: String,
+    keyPlayers: [String]
+  },
+  team2Stats: {
+    recentForm: String,
+    keyPlayers: [String]
+  },
+  venue: {
+    name: String,
+    city: String,
+    country: String,
+    capacity: String,
+    description: String,
+    knownFor: [String]
+  },
+  generatedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
+const tossPredictionSchema = new mongoose.Schema({
+  tossPrediction: {
+    winner: String,
+    choice: String,
+    confidence: String,
+    reasoning: [String]
+  },
+  conditions: {
+    time: String,
+    weather: String,
+    pitch: String
+  },
+  historicalData: {
+    team1TossWinRate: String,
+    team2TossWinRate: String,
+    venueTossPattern: String,
+    venueHistory: String
+  },
+  matchVenue: {
+    name: String,
+    city: String,
+    country: String,
+    capacity: String,
+    date: String,
+    matchTime: String,
+    description: String,
+    knownFor: [String]
+  },
+  generatedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
+const fantasyPredictionSchema = new mongoose.Schema({
+  captain: {
+    name: String,
+    role: String,
+    team: String,
+    currentForm: String,
+    expectedPoints: String,
+    reason: String
+  },
+  viceCaptain: {
+    name: String,
+    role: String,
+    team: String,
+    currentForm: String,
+    expectedPoints: String,
+    reason: String
+  },
+  players: [{
+    name: String,
+    role: String,
+    team: String,
+    isCaptain: Boolean,
+    isViceCaptain: Boolean,
+    recentForm: String,
+    matchesPlayed: String,
+    currentStats: {
+      runs: String,
+      wickets: String,
+      average: String,
+      strikeRate: String
+    },
+    selectionReason: String
+  }],
+  teamComposition: {
+    batsmen: Number,
+    bowlers: Number,
+    allRounders: Number,
+    wicketKeeper: Number
+  },
+  teamSummary: {
+    totalProjectedPoints: String,
+    strengths: [String],
+    risks: [String],
+    analysis: String
+  },
+  generatedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
 const matchSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -102,6 +225,19 @@ const matchSchema = new mongoose.Schema({
   views: {
     type: Number,
     default: 0
+  },
+  // Add prediction fields
+  matchPrediction: {
+    type: matchPredictionSchema,
+    default: null
+  },
+  tossPrediction: {
+    type: tossPredictionSchema,
+    default: null
+  },
+  fantasyPrediction: {
+    type: fantasyPredictionSchema,
+    default: null
   }
 }, {
   timestamps: true

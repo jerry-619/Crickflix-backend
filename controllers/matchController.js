@@ -97,7 +97,19 @@ const getMatch = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const createMatch = async (req, res) => {
   try {
-    const { title, description, team1, team2, startTime, category } = req.body;
+    const { 
+      title, 
+      description, 
+      team1, 
+      team2, 
+      category, 
+      streamingUrl,
+      iframeUrl,
+      isLive,
+      status,
+      scheduledTime,
+      streamingSources
+    } = req.body;
 
     // Upload thumbnail to Cloudinary if provided
     let thumbnailData = null;
@@ -114,26 +126,44 @@ const createMatch = async (req, res) => {
       }
     }
 
+    // Parse streaming sources if provided
+    let parsedStreamingSources = [];
+    if (streamingSources) {
+      try {
+        parsedStreamingSources = JSON.parse(streamingSources);
+      } catch (e) {
+        console.error('Error parsing streamingSources:', e);
+      }
+    }
+
     const match = await Match.create({
       title,
-      description,
+      description: description || '',
       thumbnail: thumbnailData?.url || '',
       thumbnailPublicId: thumbnailData?.public_id || '',
       team1: {
-        name: team1,
+        name: team1 || '',
         logo: logoData[0]?.url || '',
         logoPublicId: logoData[0]?.public_id || ''
       },
       team2: {
-        name: team2,
+        name: team2 || '',
         logo: logoData[1]?.url || '',
         logoPublicId: logoData[1]?.public_id || ''
       },
-      startTime,
-      category
+      category,
+      streamingUrl: streamingUrl || '',
+      iframeUrl: iframeUrl || '',
+      isLive: isLive || false,
+      status: status || 'upcoming',
+      scheduledTime: scheduledTime || new Date(),
+      streamingSources: parsedStreamingSources
     });
 
-    res.status(201).json(match);
+    // Populate category information before sending response
+    const populatedMatch = await Match.findById(match._id).populate('category', 'name slug');
+
+    res.status(201).json(populatedMatch);
   } catch (error) {
     console.error('Error creating match:', error);
     res.status(500).json({ message: 'Failed to create match', error: error.message });

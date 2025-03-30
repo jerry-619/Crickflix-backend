@@ -101,7 +101,15 @@ const upload = multer({
 });
 
 // Static folder
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    // Set proper cache control for images
+    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.png') || filePath.endsWith('.webp')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+      res.setHeader('Expires', new Date(Date.now() + 31536000000).toUTCString());
+    }
+  }
+}));
 
 // Attach io to req object
 app.use((req, res, next) => {

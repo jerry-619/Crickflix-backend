@@ -17,6 +17,22 @@ const streamingSourceSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const teamSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  logo: {
+    type: String,
+    default: ''
+  },
+  logoPublicId: {
+    type: String,
+    default: ''
+  }
+}, { _id: false });
+
 const matchSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -24,14 +40,12 @@ const matchSchema = new mongoose.Schema({
     trim: true
   },
   team1: {
-    type: String,
-    trim: true,
-    default: ''
+    type: teamSchema,
+    default: () => ({})
   },
   team2: {
-    type: String,
-    trim: true,
-    default: ''
+    type: teamSchema,
+    default: () => ({})
   },
   description: {
     type: String,
@@ -128,15 +142,21 @@ matchSchema.pre('save', async function(next) {
     }
 
     // Extract team names if title is modified or teams are not set
-    if (this.isModified('title') || !this.team1 || !this.team2 || this.team1 === '' || this.team2 === '') {
+    if (this.isModified('title') || !this.team1?.name || !this.team2?.name || this.team1.name === '' || this.team2.name === '') {
       console.log('Processing title for team extraction:', this.title);
       
       const extractedTeams = extractTeamsFromTitle(this.title);
       console.log('Extracted teams:', extractedTeams);
       
       if (extractedTeams) {
-        this.team1 = extractedTeams[0];
-        this.team2 = extractedTeams[1];
+        this.team1 = {
+          ...this.team1,
+          name: extractedTeams[0]
+        };
+        this.team2 = {
+          ...this.team2,
+          name: extractedTeams[1]
+        };
         console.log('Set teams:', { team1: this.team1, team2: this.team2 });
       } else {
         console.log('Could not extract teams from title');
@@ -166,8 +186,19 @@ matchSchema.pre('findOneAndUpdate', async function(next) {
       
       if (extractedTeams) {
         update.$set = update.$set || {};
-        update.$set.team1 = extractedTeams[0];
-        update.$set.team2 = extractedTeams[1];
+        
+        // Get current document to preserve existing team data
+        const doc = await this.model.findOne(this.getQuery());
+        
+        update.$set.team1 = {
+          ...(doc?.team1 || {}),
+          name: extractedTeams[0]
+        };
+        update.$set.team2 = {
+          ...(doc?.team2 || {}),
+          name: extractedTeams[1]
+        };
+        
         console.log('Updated teams:', { team1: update.$set.team1, team2: update.$set.team2 });
       }
     }

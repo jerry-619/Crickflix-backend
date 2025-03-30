@@ -109,7 +109,7 @@ async function getFantasyXI(team1, team2) {
     const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
     console.log('Is IPL match:', isIPLMatch, { team1, team2 });
     
-    const prompt = `You are simulating cricket match fantasy predictions. Create a realistic fantasy XI for a match between ${team1} vs ${team2}.
+    const prompt = `You are simulating cricket match fantasy predictions. Create a realistic fantasy XI for today's match between ${team1} vs ${team2}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
 Use your knowledge of cricket and current player statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
@@ -160,9 +160,17 @@ Return this exact JSON structure:
       },
       "matchInfo": {
         "tournament": "${isIPLMatch ? 'IPL 2025' : 'Cricket Match'}",
-        "venue": "Match Venue",
+        "venue": {
+          "name": "Match Venue Name",
+          "city": "City Name",
+          "country": "Country Name",
+          "description": "Detailed description of the venue including its history, pitch characteristics, boundary dimensions, and any notable features",
+          "capacity": "Stadium capacity",
+          "knownFor": ["Notable feature 1", "Notable feature 2"],
+          "date": "${new Date().toISOString().split('T')[0]}",
+          "matchTime": "Match start time (e.g., 7:30 PM IST)"
+        },
         "pitchReport": "Brief pitch and weather conditions",
-        "date": "${new Date().toISOString().split('T')[0]}",
         "lastUpdated": "${new Date().toISOString()}"
       },
       "teamSummary": {
@@ -225,19 +233,25 @@ async function getMatchPrediction(team1, team2) {
     const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
     console.log('Is IPL match:', isIPLMatch, { team1, team2 });
     
-    const prompt = `You are simulating cricket match predictions. Create a realistic prediction for a match between ${team1} vs ${team2}.
+    const prompt = `You are simulating cricket match predictions. Create a realistic prediction for today's match between ${team1} vs ${team2}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
 Use your knowledge of cricket and current player statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
+Important: You MUST provide complete venue information including name, city, country, and description.
 
 Return this exact JSON structure:
     {
       "team1": "${team1}",
       "team2": "${team2}",
       "venue": {
-        "name": "Match Venue Name",
-        "city": "City Name",
-        "country": "Country Name"
+        "name": "Provide actual venue name (e.g., Wankhede Stadium, Eden Gardens, etc.)",
+        "city": "Provide actual city name (e.g., Mumbai, Kolkata, etc.)",
+        "country": "Provide actual country name (e.g., India)",
+        "description": "Provide actual venue description with history and features",
+        "capacity": "Provide actual stadium capacity (e.g., 33,000)",
+        "knownFor": ["Provide actual notable features"],
+        "date": "${new Date().toISOString().split('T')[0]}",
+        "matchTime": "7:30 PM IST"
       },
       "team1Stats": {
         "recentForm": "Recent performance summary",
@@ -254,7 +268,7 @@ Return this exact JSON structure:
       "matchAnalysis": {
         "conditions": {
           "weather": "Weather conditions",
-          "pitch": "Pitch conditions",
+          "pitch": "Detailed pitch conditions and behavior",
           "time": "Day/Night"
         },
         "keyBattles": [
@@ -277,19 +291,51 @@ Return this exact JSON structure:
       }
     }`;
 
-    const result = await retryOperation(async () => {
+    let result;
+    try {
       console.log('Sending prompt to Gemini AI...');
       const response = await ai.models.generateContent({
         model: "gemini-1.5-flash",
         contents: prompt
       });
       console.log('Received response from Gemini AI');
-      return response.text;
-    });
+      result = response.text;
+    } catch (aiError) {
+      console.error('Error from Gemini AI:', aiError);
+      throw new Error('Failed to generate predictions. AI service error.');
+    }
+
+    if (!result) {
+      throw new Error('No response received from AI service.');
+    }
 
     console.log('Match prediction generated successfully');
-    const cleanedResponse = cleanJsonResponse(result);
-    return cleanedResponse;
+    try {
+      const cleanedResponse = cleanJsonResponse(result);
+      const parsed = JSON.parse(cleanedResponse);
+      
+      // Validate venue information
+      if (!parsed.venue || !parsed.venue.name || !parsed.venue.city || !parsed.venue.country) {
+        throw new Error('Invalid venue information in AI response.');
+      }
+
+      // Ensure venue has all required fields
+      parsed.venue = {
+        name: parsed.venue.name || 'N/A',
+        city: parsed.venue.city || 'N/A',
+        country: parsed.venue.country || 'N/A',
+        description: parsed.venue.description || 'No description available',
+        capacity: parsed.venue.capacity || 'N/A',
+        knownFor: Array.isArray(parsed.venue.knownFor) ? parsed.venue.knownFor : ['N/A'],
+        date: new Date().toISOString().split('T')[0],
+        matchTime: parsed.venue.matchTime || '7:30 PM IST'
+      };
+
+      return JSON.stringify(parsed);
+    } catch (parseError) {
+      console.error('Error parsing AI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error) {
     console.error('Error generating match prediction:', error);
     console.error('Error details:', error.message);
@@ -305,24 +351,30 @@ async function getTossPrediction(team1, team2) {
     const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
     console.log('Is IPL match:', isIPLMatch, { team1, team2 });
     
-    const prompt = `You are simulating cricket match toss predictions. Create a realistic toss prediction for a match between ${team1} vs ${team2}.
+    const prompt = `You are simulating cricket match toss predictions. Create a realistic toss prediction for today's match between ${team1} vs ${team2}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
 Use your knowledge of cricket and current statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
+Important: You MUST provide complete venue information including name, city, country, and description.
 
 Return this exact JSON structure:
     {
       "team1": "${team1}",
       "team2": "${team2}",
-      "venue": {
-        "name": "Match Venue Name",
-        "city": "City Name",
-        "country": "Country Name"
+      "matchVenue": {
+        "name": "Provide actual venue name (e.g., Wankhede Stadium, Eden Gardens, etc.)",
+        "city": "Provide actual city name (e.g., Mumbai, Kolkata, etc.)",
+        "country": "Provide actual country name (e.g., India)",
+        "description": "Provide actual venue description with history and features",
+        "capacity": "Provide actual stadium capacity (e.g., 33,000)",
+        "knownFor": ["Provide actual notable features"],
+        "date": "${new Date().toISOString().split('T')[0]}",
+        "matchTime": "7:30 PM IST"
       },
       "conditions": {
         "time": "Day/Night",
         "weather": "Weather conditions",
-        "pitch": "Pitch conditions"
+        "pitch": "Detailed pitch conditions and behavior"
       },
       "tossPrediction": {
         "winner": "Team predicted to win toss",
@@ -333,23 +385,56 @@ Return this exact JSON structure:
       "historicalData": {
         "team1TossWinRate": "Recent toss win percentage",
         "team2TossWinRate": "Recent toss win percentage",
-        "venueTossPattern": "Common toss decisions at this venue"
+        "venueTossPattern": "Common toss decisions at this venue",
+        "venueHistory": "Historical toss decisions and their outcomes at this venue"
       }
     }`;
 
-    const result = await retryOperation(async () => {
+    let result;
+    try {
       console.log('Sending prompt to Gemini AI...');
       const response = await ai.models.generateContent({
         model: "gemini-1.5-flash",
         contents: prompt
       });
       console.log('Received response from Gemini AI');
-      return response.text;
-    });
+      result = response.text;
+    } catch (aiError) {
+      console.error('Error from Gemini AI:', aiError);
+      throw new Error('Failed to generate predictions. AI service error.');
+    }
+
+    if (!result) {
+      throw new Error('No response received from AI service.');
+    }
 
     console.log('Toss prediction generated successfully');
-    const cleanedResponse = cleanJsonResponse(result);
-    return cleanedResponse;
+    try {
+      const cleanedResponse = cleanJsonResponse(result);
+      const parsed = JSON.parse(cleanedResponse);
+      
+      // Validate venue information
+      if (!parsed.matchVenue || !parsed.matchVenue.name || !parsed.matchVenue.city || !parsed.matchVenue.country) {
+        throw new Error('Invalid venue information in AI response.');
+      }
+
+      // Ensure venue has all required fields
+      parsed.matchVenue = {
+        name: parsed.matchVenue.name || 'N/A',
+        city: parsed.matchVenue.city || 'N/A',
+        country: parsed.matchVenue.country || 'N/A',
+        description: parsed.matchVenue.description || 'No description available',
+        capacity: parsed.matchVenue.capacity || 'N/A',
+        knownFor: Array.isArray(parsed.matchVenue.knownFor) ? parsed.matchVenue.knownFor : ['N/A'],
+        date: new Date().toISOString().split('T')[0],
+        matchTime: parsed.matchVenue.matchTime || '7:30 PM IST'
+      };
+
+      return JSON.stringify(parsed);
+    } catch (parseError) {
+      console.error('Error parsing AI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error) {
     console.error('Error generating toss prediction:', error);
     console.error('Error details:', error.message);

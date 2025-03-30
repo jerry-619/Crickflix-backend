@@ -151,7 +151,7 @@ const updateMatch = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    const { title, description, team1, team2, startTime, category } = req.body;
+    const { title, description, team1, team2, startTime, category, streamingUrl, iframeUrl, isLive, status, scheduledTime } = req.body;
 
     // Upload new thumbnail if provided
     let thumbnailData = null;
@@ -180,24 +180,53 @@ const updateMatch = async (req, res) => {
       }
     }
 
-    match.title = title || match.title;
-    match.description = description || match.description;
-    match.thumbnail = thumbnailData?.url || match.thumbnail;
-    match.thumbnailPublicId = thumbnailData?.public_id || match.thumbnailPublicId;
-    match.team1 = {
-      name: team1 || match.team1.name,
-      logo: logoData[0]?.url || match.team1.logo,
-      logoPublicId: logoData[0]?.public_id || match.team1.logoPublicId
+    // Create update data object
+    const updateData = {
+      title: title || match.title,
+      description: description || match.description,
+      thumbnail: thumbnailData?.url || match.thumbnail,
+      thumbnailPublicId: thumbnailData?.public_id || match.thumbnailPublicId,
+      team1: {
+        name: team1 || match.team1.name,
+        logo: logoData[0]?.url || match.team1.logo || '',
+        logoPublicId: logoData[0]?.public_id || match.team1.logoPublicId || ''
+      },
+      team2: {
+        name: team2 || match.team2.name,
+        logo: logoData[1]?.url || match.team2.logo || '',
+        logoPublicId: logoData[1]?.public_id || match.team2.logoPublicId || ''
+      },
+      startTime: startTime || match.startTime,
+      category: category || match.category,
+      streamingUrl: streamingUrl || match.streamingUrl || '',
+      iframeUrl: iframeUrl || match.iframeUrl || '',
+      isLive: isLive !== undefined ? isLive : match.isLive,
+      status: status || match.status,
+      scheduledTime: scheduledTime || match.scheduledTime
     };
-    match.team2 = {
-      name: team2 || match.team2.name,
-      logo: logoData[1]?.url || match.team2.logo,
-      logoPublicId: logoData[1]?.public_id || match.team2.logoPublicId
-    };
-    match.startTime = startTime || match.startTime;
-    match.category = category || match.category;
 
-    const updatedMatch = await match.save();
+    // If streaming sources are provided in the request body, update them
+    if (req.body.streamingSources) {
+      try {
+        updateData.streamingSources = JSON.parse(req.body.streamingSources);
+      } catch (e) {
+        console.error('Error parsing streamingSources:', e);
+        updateData.streamingSources = [];
+      }
+    }
+
+    // Update the match using findByIdAndUpdate with $set operator
+    const updatedMatch = await Match.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).populate('category', 'name slug');
+
+    // Emit socket event for updated match if Socket.IO is available
+    if (req.io) {
+      req.io.emit('matchUpdated', updatedMatch);
+    }
+
     res.json(updatedMatch);
   } catch (error) {
     console.error('Error updating match:', error);

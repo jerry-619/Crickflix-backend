@@ -21,7 +21,7 @@ const teamSchema = new mongoose.Schema({
   name: {
     type: String,
     trim: true,
-    default: ''
+    required: true
   },
   logo: {
     type: String,
@@ -39,29 +39,36 @@ const matchSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  description: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  thumbnail: {
+    type: String,
+    default: ''
+  },
+  thumbnailPublicId: {
+    type: String,
+    default: ''
+  },
   team1: {
     type: teamSchema,
+    required: true,
     default: () => ({})
   },
   team2: {
     type: teamSchema,
+    required: true,
     default: () => ({})
   },
-  description: {
-    type: String,
-    trim: true
-  },
-  thumbnail: {
-    type: String
-  },
-  thumbnailPublicId: {
-    type: String
-  },
   streamingUrl: {
-    type: String
+    type: String,
+    default: ''
   },
   iframeUrl: {
-    type: String
+    type: String,
+    default: ''
   },
   streamType: {
     type: String,
@@ -190,13 +197,17 @@ matchSchema.pre('findOneAndUpdate', async function(next) {
         // Get current document to preserve existing team data
         const doc = await this.model.findOne(this.getQuery());
         
+        // Create plain objects for team data
         update.$set.team1 = {
-          ...(doc?.team1 || {}),
-          name: extractedTeams[0]
+          name: extractedTeams[0],
+          logo: doc?.team1?.logo || '',
+          logoPublicId: doc?.team1?.logoPublicId || ''
         };
+        
         update.$set.team2 = {
-          ...(doc?.team2 || {}),
-          name: extractedTeams[1]
+          name: extractedTeams[1],
+          logo: doc?.team2?.logo || '',
+          logoPublicId: doc?.team2?.logoPublicId || ''
         };
         
         console.log('Updated teams:', { team1: update.$set.team1, team2: update.$set.team2 });

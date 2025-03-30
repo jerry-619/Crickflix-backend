@@ -86,6 +86,9 @@ Important team changes to note:
 
 // Add this helper function at the top with other helper functions
 function isIPLTeam(teamName) {
+  // Handle both string and object team names
+  const name = typeof teamName === 'string' ? teamName : teamName?.name || '';
+  
   const iplTeams = {
     // Abbreviations
     'MI': true, 'CSK': true, 'RCB': true, 'KKR': true, 'SRH': true, 
@@ -98,26 +101,30 @@ function isIPLTeam(teamName) {
     'GUJARAT TITANS': true, 'LUCKNOW SUPER GIANTS': true
   };
   
-  return iplTeams[teamName.toUpperCase()] || false;
+  return iplTeams[name.toUpperCase()] || false;
 }
 
 async function getFantasyXI(team1, team2) {
   try {
-    console.log(`Generating fantasy XI for ${team1} vs ${team2}`);
+    // Extract team names
+    const team1Name = typeof team1 === 'string' ? team1 : team1?.name || 'Team 1';
+    const team2Name = typeof team2 === 'string' ? team2 : team2?.name || 'Team 2';
+    
+    console.log(`Generating fantasy XI for ${team1Name} vs ${team2Name}`);
     
     // Updated IPL match detection
     const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
-    console.log('Is IPL match:', isIPLMatch, { team1, team2 });
+    console.log('Is IPL match:', isIPLMatch, { team1: team1Name, team2: team2Name });
     
-    const prompt = `You are simulating cricket match fantasy predictions. Create a realistic fantasy XI for today's match between ${team1} vs ${team2}.
+    const prompt = `You are simulating cricket match fantasy predictions. Create a realistic fantasy XI for today's match between ${team1Name} vs ${team2Name}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
 Use your knowledge of cricket and current player statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
 
 Return this exact JSON structure:
     {
-      "team1": "${team1}",
-      "team2": "${team2}",
+      "team1": "${team1Name}",
+      "team2": "${team2Name}",
       "players": [
         {
           "name": "Player Name",
@@ -227,13 +234,17 @@ Return this exact JSON structure:
 
 async function getMatchPrediction(team1, team2) {
   try {
-    console.log(`Generating match prediction for ${team1} vs ${team2}`);
+    // Extract team names
+    const team1Name = typeof team1 === 'string' ? team1 : team1?.name || 'Team 1';
+    const team2Name = typeof team2 === 'string' ? team2 : team2?.name || 'Team 2';
+    
+    console.log(`Generating match prediction for ${team1Name} vs ${team2Name}`);
     
     // Updated IPL match detection
     const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
-    console.log('Is IPL match:', isIPLMatch, { team1, team2 });
+    console.log('Is IPL match:', isIPLMatch, { team1: team1Name, team2: team2Name });
     
-    const prompt = `You are simulating cricket match predictions. Create a realistic prediction for today's match between ${team1} vs ${team2}.
+    const prompt = `You are simulating cricket match predictions. Create a realistic prediction for today's match between ${team1Name} vs ${team2Name}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
 Use your knowledge of cricket and current player statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
@@ -241,8 +252,8 @@ Important: You MUST provide complete venue information including name, city, cou
 
 Return this exact JSON structure:
     {
-      "team1": "${team1}",
-      "team2": "${team2}",
+      "team1": "${team1Name}",
+      "team2": "${team2Name}",
       "venue": {
         "name": "Provide actual venue name (e.g., Wankhede Stadium, Eden Gardens, etc.)",
         "city": "Provide actual city name (e.g., Mumbai, Kolkata, etc.)",
@@ -345,13 +356,17 @@ Return this exact JSON structure:
 
 async function getTossPrediction(team1, team2) {
   try {
-    console.log(`Generating toss prediction for ${team1} vs ${team2}`);
+    // Extract team names
+    const team1Name = typeof team1 === 'string' ? team1 : team1?.name || 'Team 1';
+    const team2Name = typeof team2 === 'string' ? team2 : team2?.name || 'Team 2';
+    
+    console.log(`Generating toss prediction for ${team1Name} vs ${team2Name}`);
     
     // Updated IPL match detection
     const isIPLMatch = isIPLTeam(team1) && isIPLTeam(team2);
-    console.log('Is IPL match:', isIPLMatch, { team1, team2 });
+    console.log('Is IPL match:', isIPLMatch, { team1: team1Name, team2: team2Name });
     
-    const prompt = `You are simulating cricket match toss predictions. Create a realistic toss prediction for today's match between ${team1} vs ${team2}.
+    const prompt = `You are simulating cricket match toss predictions. Create a realistic toss prediction for today's match between ${team1Name} vs ${team2Name}.
 ${isIPLMatch ? IPL_2025_CONTEXT : ''}
 Use your knowledge of cricket and current statistics to create plausible predictions.
 Important: DO NOT explain limitations or apologize - just generate the JSON data as requested.
@@ -359,8 +374,8 @@ Important: You MUST provide complete venue information including name, city, cou
 
 Return this exact JSON structure:
     {
-      "team1": "${team1}",
-      "team2": "${team2}",
+      "team1": "${team1Name}",
+      "team2": "${team2Name}",
       "matchVenue": {
         "name": "Provide actual venue name (e.g., Wankhede Stadium, Eden Gardens, etc.)",
         "city": "Provide actual city name (e.g., Mumbai, Kolkata, etc.)",

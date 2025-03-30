@@ -139,15 +139,6 @@ function extractTeamsFromTitle(title) {
 // Pre-save middleware
 matchSchema.pre('save', async function(next) {
   try {
-    // Handle streaming sources
-    if (this.streamingUrl && (!this.streamingSources || this.streamingSources.length === 0)) {
-      this.streamingSources = [{
-        name: 'Default Source',
-        url: this.streamingUrl,
-        type: this.streamType || 'm3u8'
-      }];
-    }
-
     // Extract team names if title is modified or teams are not set
     if (this.isModified('title') || !this.team1?.name || !this.team2?.name || this.team1.name === '' || this.team2.name === '') {
       console.log('Processing title for team extraction:', this.title);

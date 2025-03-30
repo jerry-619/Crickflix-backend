@@ -198,8 +198,9 @@ const updateMatch = async (req, res) => {
       },
       startTime: startTime || match.startTime,
       category: category || match.category,
-      streamingUrl: streamingUrl || match.streamingUrl || '',
-      iframeUrl: iframeUrl || match.iframeUrl || '',
+      // Allow clearing of streaming URLs
+      streamingUrl: streamingUrl !== undefined ? streamingUrl : match.streamingUrl,
+      iframeUrl: iframeUrl !== undefined ? iframeUrl : match.iframeUrl,
       isLive: isLive !== undefined ? isLive : match.isLive,
       status: status || match.status,
       scheduledTime: scheduledTime || match.scheduledTime

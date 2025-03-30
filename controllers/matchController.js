@@ -45,7 +45,12 @@ const getMatches = asyncHandler(async (req, res) => {
   const filter = {};
   
   if (category) {
-    filter.category = category;
+    // Find category by slug first
+    const categoryDoc = await Category.findOne({ slug: category });
+    if (!categoryDoc) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+    filter.category = categoryDoc._id;
   }
   
   if (status) {
@@ -53,7 +58,7 @@ const getMatches = asyncHandler(async (req, res) => {
   }
   
   const matches = await Match.find(filter)
-    .populate('category', 'name')
+    .populate('category', 'name slug')
     .sort({ createdAt: -1 });
 
   // Extract teams for any matches that need it

@@ -4,17 +4,20 @@ const crypto = require('crypto');
 const deployProject = () => {
     console.log('Starting deployment process...');
     return new Promise((resolve, reject) => {
-        // Run commands as bitnami user with proper permissions
-        const command = 'sudo -u bitnami bash -c "' +
-                       'cd /home/bitnami/crickflix/backend && ' +
-                       'git fetch origin && ' +
-                       'git reset --hard origin/main && ' +
-                       'npm install && ' +
-                       'pm2 restart crickflix-backend"';
+        // Run commands with proper permission handling
+        const commands = [
+            'cd /home/bitnami/crickflix/backend',
+            'sudo chown -R bitnami:bitnami .',
+            'sudo chmod -R 775 .',
+            'git fetch origin',
+            'git reset --hard origin/main',
+            'npm install',
+            'pm2 restart crickflix-backend'
+        ].join(' && ');
         
-        console.log('Executing command:', command);
+        console.log('Executing commands:', commands);
         
-        exec(command, (error, stdout, stderr) => {
+        exec(commands, (error, stdout, stderr) => {
             if (error) {
                 console.error('Deployment Error:', error);
                 console.error('Error details:', stderr);

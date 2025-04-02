@@ -2,15 +2,15 @@ const { exec } = require('child_process');
 const crypto = require('crypto');
 
 const deployProject = () => {
-    console.log('Starting deployment process..');
+    console.log('Starting deployment process...');
     return new Promise((resolve, reject) => {
-        // Use the correct bitnami path
-        const command = 'cd /home/bitnami/crickflix/backend && ' +
-                       'git config --global --add safe.directory /home/bitnami/crickflix/backend && ' +
+        // Run commands as bitnami user with proper permissions
+        const command = 'sudo -u bitnami bash -c "' +
+                       'cd /home/bitnami/crickflix/backend && ' +
                        'git fetch origin && ' +
                        'git reset --hard origin/main && ' +
                        'npm install && ' +
-                       'pm2 restart crickflix-backend';
+                       'pm2 restart crickflix-backend"';
         
         console.log('Executing command:', command);
         

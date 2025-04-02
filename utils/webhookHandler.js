@@ -2,7 +2,7 @@ const { exec } = require('child_process');
 const crypto = require('crypto');
 
 const deployProject = () => {
-    console.log('Starting deployment process...');
+    console.log('Starting deployment process..');
     return new Promise((resolve, reject) => {
         // Use the correct bitnami path
         const command = 'cd /home/bitnami/crickflix/backend && ' +

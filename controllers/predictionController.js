@@ -42,22 +42,11 @@ const getMatchFantasyXI = asyncHandler(async (req, res) => {
       throw new Error('Match teams are not properly configured');
     }
 
-    // Check if we already have a fantasy prediction
-    if (match.fantasyPrediction) {
-      console.log('Using existing fantasy prediction');
-      return res.json(match.fantasyPrediction);
-    }
-
     const fantasyXI = await getFantasyXI(match.team1, match.team2);
     console.log('Fantasy XI generated successfully');
     
     try {
       const parsedResponse = safeJsonParse(fantasyXI);
-      
-      // Save the prediction to the match
-      match.fantasyPrediction = parsedResponse;
-      await match.save();
-      
       res.json(parsedResponse);
     } catch (parseError) {
       console.error('Error parsing fantasy XI response:', parseError);
@@ -93,12 +82,6 @@ const getMatchWinPrediction = asyncHandler(async (req, res) => {
       throw new Error('Match teams are not properly configured');
     }
 
-    // Check if we already have a match prediction
-    if (match.matchPrediction) {
-      console.log('Using existing match prediction');
-      return res.json(match.matchPrediction);
-    }
-
     const prediction = await getMatchPrediction(match.team1, match.team2);
     console.log('Match prediction generated successfully');
     
@@ -110,10 +93,6 @@ const getMatchWinPrediction = asyncHandler(async (req, res) => {
       if (!parsedResponse || !parsedResponse.matchAnalysis) {
         throw new Error('Invalid prediction format: Missing required fields');
       }
-      
-      // Save the prediction to the match
-      match.matchPrediction = parsedResponse;
-      await match.save();
       
       res.json(parsedResponse);
     } catch (parseError) {
@@ -150,22 +129,11 @@ const getMatchTossPrediction = asyncHandler(async (req, res) => {
       throw new Error('Match teams are not properly configured');
     }
 
-    // Check if we already have a toss prediction
-    if (match.tossPrediction) {
-      console.log('Using existing toss prediction');
-      return res.json(match.tossPrediction);
-    }
-
     const prediction = await getTossPrediction(match.team1, match.team2);
     console.log('Toss prediction generated successfully');
     
     try {
       const parsedResponse = safeJsonParse(prediction);
-      
-      // Save the prediction to the match
-      match.tossPrediction = parsedResponse;
-      await match.save();
-      
       res.json(parsedResponse);
     } catch (parseError) {
       console.error('Error parsing toss prediction response:', parseError);

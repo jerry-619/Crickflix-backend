@@ -9,6 +9,7 @@ const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const scheduledTasks = require('./scheduledTasks'); // Import the scheduled tasks
 
 // Load env vars
 dotenv.config();
@@ -175,6 +176,9 @@ app.set('io', io);
 
 // Export upload middleware
 module.exports = { upload };
+
+// Start the scheduled tasks
+scheduledTasks(); // This should now work correctly
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {

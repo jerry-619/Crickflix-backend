@@ -20,45 +20,7 @@ function safeJsonParse(str) {
   }
 }
 
-// @desc    Get Fantasy XI prediction for a match
-// @route   GET /api/predictions/:matchId/fantasy
-// @access  Public
-const getMatchFantasyXI = asyncHandler(async (req, res) => {
-  try {
-    console.log('Fetching fantasy XI for match:', req.params.matchId);
-    
-    const match = await Match.findById(req.params.matchId);
-    if (!match) {
-      console.log('Match not found:', req.params.matchId);
-      res.status(404);
-      throw new Error('Match not found');
-    }
 
-    console.log('Match found:', { title: match.title, team1: match.team1, team2: match.team2 });
-
-    if (!match.team1 || !match.team2) {
-      console.log('Teams not found in match data');
-      res.status(400);
-      throw new Error('Match teams are not properly configured');
-    }
-
-    const fantasyXI = await getFantasyXI(match.team1, match.team2);
-    console.log('Fantasy XI generated successfully');
-    
-    try {
-      const parsedResponse = safeJsonParse(fantasyXI);
-      res.json(parsedResponse);
-    } catch (parseError) {
-      console.error('Error parsing fantasy XI response:', parseError);
-      res.status(500);
-      throw new Error('Invalid response format from prediction service');
-    }
-  } catch (error) {
-    console.error('Error in getMatchFantasyXI:', error);
-    res.status(error.status || 500);
-    throw error;
-  }
-});
 
 // @desc    Get match win prediction
 // @route   GET /api/predictions/:matchId/match
@@ -148,7 +110,6 @@ const getMatchTossPrediction = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  getMatchFantasyXI,
   getMatchWinPrediction,
   getMatchTossPrediction
 }; 

@@ -12,8 +12,21 @@ const streamingSourceSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['m3u8', 'dash', 'mp4', 'iframe', 'other'],
-    default: 'm3u8'
+    enum: ['m3u8', 'dashmpd', 'iframe'],
+    required: true
+  },
+  drmConfig: {
+    type: Object,
+    required: function() {
+      return this.type === 'dashmpd';
+    },
+    validate: {
+      validator: function(value) {
+        if (this.type !== 'dashmpd') return true;
+        return value && value.keyId && value.key;
+      },
+      message: 'DRM configuration must include keyId and key for DASH+DRM streams'
+    }
   }
 }, { _id: false });
 
